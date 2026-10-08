@@ -1,3 +1,20 @@
+# Dados brutos volumosos (mantendo apenas a base tratada de Matão)
 data/*
 !data/matao_limpo.csv
+
+# Ambientes virtuais locais
+.venv/
+.ambiente/
+env/
+venv/
+
+# Configurações de IDE e Agentes de desenvolvimento local
+.agents/
+.vscode/
+.idea/
+
+# Caches e arquivos temporários do Python
 __pycache__/
+*.py[cod]
+*$py.class
+.DS_Store
