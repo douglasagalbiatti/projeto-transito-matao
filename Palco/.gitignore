@@ -1,0 +1,6 @@
+# Dados locais do dono — nunca versionar
+.palco/
+*.html
+deck*.json
+__pycache__/
+*.pyc
