@@ -4,134 +4,118 @@
 [![Pandas](https://img.shields.io/badge/pandas-2.0%2B-150458.svg)](https://pandas.pydata.org/)
 [![Scikit-Learn](https://img.shields.io/badge/scikit--learn-1.4%2B-orange.svg)](https://scikit-learn.org/)
 [![Plotly](https://img.shields.io/badge/plotly-5.20%2B-3F4F75.svg)](https://plotly.com/)
-[![Status](https://img.shields.io/badge/Status-Concluído-brightgreen.svg)]()
 
-Estudo completo de Ciência de Dados sobre os sinistros de trânsito ocorridos no município de **Matão/SP** ao longo de mais de 11 anos (março de 2015 a agosto de 2026). O projeto abrange desde a ingestão otimizada de dados estaduais volumosos até modelagem preditiva supervisionada de gravidade e visualização geoespacial interativa.
+Estudo de Ciência de Dados sobre os sinistros de trânsito registrados em **Matão/SP** desde março de 2015, com ingestão de dados estaduais, análise estatística, dashboard e mapa interativo.
+
+> **Revisão de novembro de 2026:** as conclusões sobre média diária, letalidade, rodovias, vias críticas e motocicletas foram corrigidas. A apresentação e o resumo em PDF também foram atualizados. O `Relatorio_Sinistros_Transito_Matao_2015-2026-1.pdf` e os arquivos de `publicacao_a_comarca/` são registros históricos e mantêm os textos anteriores; veja a [errata](output/relatorios/ERRATA.md).
 
 ---
 
 ## 📌 Sumário Executivo
 
-- **Fonte de Dados:** Infosiga SP (Movimento Paulista de Segurança no Trânsito / Governo do Estado de SP).
-- **Volume Consolidado:** **4.074 sinistros** registrados em Matão (`cod_ibge == 3529302`), com **3.648 acidentes georreferenciados válidos**.
-- **Otimização de Memória:** Pipeline de ingestão em lotes (*chunks*) que reduziu quase 400 MB de dados brutos estaduais para um dataset final limpo de **788 KB**.
-- **Descoberta Central de Risco:** Choques contra obstáculos fixos (postes, árvores) possuem a maior taxa de letalidade (**14,14%**), quase 4 vezes superior à colisão veicular.
-- **Preditor #1 de Severidade:** A presença de **motocicletas** despontou como a variável mais determinante para acidentes com lesões graves ou morte (Gini Importance ~ 0,17).
-- **Pico Temporal:** O intervalo entre **17h e 19h** (saída de fábricas e comércio) concentra o maior volume de colisões da cidade.
+Números do recorte até 29/09/2026:
+
+- **Fonte de Dados:** Infosiga SP.
+- **Volume:** **4.126 registros** (`cod_ibge == 3529302`), dos quais 1.916 são notificações, quase sempre sem dados de vítimas e veículos.
+- **Base comparável:** letalidade, gravidade por modal e modelo usam sinistros de 2019 em diante, sem notificações.
+- **Óbitos:** **150 vítimas** em 143 sinistros; 55% nas vias urbanas e 41% nas estradas e rodovias, que têm maior letalidade por registro (14,7% contra 2,2%).
+- **Choque e colisão:** a letalidade do choque é 4,29 vezes a da colisão (IC95% 2,73 a 6,74), diferença que ocorre nas vias urbanas e não nas rodovias.
+- **Dias:** 1,42 registros/dia nos dias úteis e 1,51 nos fins de semana (p = 0,107), com sexta e sábado acima dos demais dias.
+- **Modelo:** o Random Forest não supera a referência de sempre prever a classe mais comum (78,8%).
 
 ---
 
 ## 📂 Estrutura do Projeto
 
 ```text
-projeto-acidentes-matao/
+projeto-transito-matao/
 │
+├── app.py                             # Dashboard Streamlit
 ├── data/
-│   ├── sinistros_2015-2021.csv        # Dado bruto estadual (Infosiga)
-│   ├── sinistros_2022-2024.csv        # Dado bruto estadual (Infosiga)
-│   ├── sinistros_2025-2026.csv        # Dado bruto estadual (Infosiga)
-│   └── matao_limpo.csv                # Dataset tratado consolidado (2015-2026)
-│
+│   └── matao_limpo.csv                # Dataset tratado consolidado
 ├── notebooks/
-│   ├── 01-exploracao.ipynb            # Leitura diagnóstica, chunks e auditoria de nulos
-│   ├── 02-limpeza.ipynb               # Unificação de períodos, tipos e feature engineering
-│   ├── 03-analise-matao.ipynb         # EDA temporal, modais, teste t e Machine Learning
-│   └── 04-visualizacoes.ipynb         # Mapeamento geoespacial interativo (Plotly Carto)
-│
+│   ├── 01-exploracao.ipynb            # Leitura diagnóstica e auditoria de nulos
+│   ├── 02-limpeza.ipynb               # Unificação, tipos e feature engineering
+│   ├── 03-analise-matao.ipynb         # Análise temporal, modais, teste e modelo
+│   └── 04-visualizacoes.ipynb         # Mapa interativo e ranking de vias
 ├── output/
-│   ├── graficos/                      # Figuras PNG de alta resolução e mapa HTML
-│   │   ├── acidentes_por_ano.png
-│   │   ├── acidentes_dia_e_hora.png
-│   │   ├── tipos_e_veiculos.png
-│   │   ├── heatmap_dia_hora.png
-│   │   ├── importancia_features_ml.png
-│   │   └── mapa_acidentes.html
+│   ├── graficos/                      # Figuras e mapa HTML
 │   └── relatorios/
-│       ├── relatorio_final_matao.md   # Relatório técnico-executivo completo
-│       └── resumo_anual_matao.csv     # Tabela anual agregada de vítimas
-│
-├── requirements.txt                   # Dependências do projeto
-└── README.md                          # Este arquivo
+│       ├── relatorio_final_matao.md   # Relatório técnico revisado
+│       └── resumo_anual_matao.csv     # Tabela anual agregada
+├── scripts/
+│   └── atualizar_dados_infosiga.py    # ETL mensal
+├── src/
+│   └── metricas.py                    # Regras estatísticas compartilhadas
+├── tests/
+└── requirements.txt
 ```
 
 ---
 
-## 📊 Principais Resultados e Visualizações
+## 📊 Principais Resultados
 
-### 1. Evolução Histórica Anual (2015–2026)
-A análise temporal revelou um marco metodológico essencial: até 2018 o Infosiga registrava exclusivamente fatalidades; a partir de 2019, o registro foi ampliado para sinistros não fatais. A série de óbitos, no entanto, é contínua e estável entre 6 e 17 mortes por ano em Matão.
+### 1. Evolução Anual
+Até 2018, a base traz apenas sinistros fatais. A partir de 2019, a participação das notificações varia de 22% a 84%, então o total anual não mede tendência. Os sinistros com óbito variam de 6 a 17 por ano, e as vítimas fatais, de 6 a 18.
 
 ![Acidentes por Ano](output/graficos/acidentes_por_ano.png)
 
----
-
-### 2. Padrões de Horário e Dias da Semana
-O final da tarde (17h–19h) concentra a maior sobrecarga no trânsito local. Um teste de hipótese (*Student's t-test*) comprovou que a média diária de acidentes é estatisticamente idêntica entre dias úteis (**2,03 acidentes/dia**) e fins de semana (**2,04 acidentes/dia**), com $p\text{-valor} = 0,76$.
+### 2. Horários e Dias da Semana
+Os maiores volumes ocorrem às 17h, 18h e 19h, sem dado de fluxo de veículos que permita medir risco. O teste de Welch com todos os dias do calendário não demonstra diferença entre dias úteis e fins de semana, o que não prova igualdade.
 
 ![Acidentes por Dia e Hora](output/graficos/acidentes_dia_e_hora.png)
 
----
-
-### 3. Modais e a Letalidade por Tipo de Sinistro
-Automóveis (36,3%) e Motocicletas (33,8%) dividem o protagonismo dos sinistros. Contudo, a análise de letalidade revela o perigo do choque contra obstáculo fixo:
+### 3. Letalidade por Tipo de Sinistro (base comparável)
 
 ![Tipos e Veículos](output/graficos/tipos_e_veiculos.png)
 
-| Tipo de Sinistro | Total de Casos | Óbitos | Feridos Graves | Taxa de Letalidade (%) |
-| :--- | :---: | :---: | :---: | :---: |
-| **CHOQUE** | 290 | 41 | 34 | **14,14%** |
-| **ATROPELAMENTO** | 207 | 16 | 26 | **7,73%** |
-| **COLISÃO** | 1.506 | 58 | 176 | **3,85%** |
-| **OUTROS** | 1.367 | 24 | 45 | **1,76%** |
+| Tipo de Sinistro | Sinistros | Com óbito | Óbitos (pessoas) | Feridos graves (pessoas) | Letalidade |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **ATROPELAMENTO** | 92 | 14 | 14 | 24 | **15,22%** |
+| **CHOQUE** | 267 | 32 | 33 | 36 | **11,99%** |
+| **OUTROS** | 371 | 17 | 18 | 47 | **4,58%** |
+| **COLISÃO** | 1.360 | 38 | 40 | 182 | **2,79%** |
 
----
-
-### 4. Matriz de Calor: Dia da Semana vs Hora do Dia
-Identificação visual das "zonas quentes" da rotina do município.
+### 4. Dia da Semana e Hora do Dia
 
 ![Mapa de Calor Dia e Hora](output/graficos/heatmap_dia_hora.png)
 
----
-
-### 5. Modelo Preditivo (Random Forest)
-Treinamento de um classificador supervisionado com balanceamento de pesos de classe (`class_weight='balanced'`), atingindo **79% de acurácia global**. O ranking de importância de variáveis comprovou empiricamente que a **motocicleta é a variável que mais governa a severidade do acidente**.
+### 5. Modelo Random Forest
+O modelo prevê feridos leves em todo o conjunto de teste, portanto não sustenta previsão de gravidade. A importância de permutação não indica sentido nem causa.
 
 ![Importância das Features](output/graficos/importancia_features_ml.png)
 
----
-
-### 6. Mapeamento Geoespacial Interativo
-Construído com **Plotly** e renderizado sobre o estilo **Carto Positron**, mapeando 3.648 sinistros. O mapa comprova que enquanto a área urbana concentra feridos leves e danos materiais, os eixos das rodovias **SP-310 (Washington Luís)** e **SP-326 (Faria Lima)** concentram a grande maioria das fatalidades (pontos vermelhos).
-
-> 🗺️ **Acesse o mapa interativo:** Abra o arquivo `output/graficos/mapa_acidentes.html` diretamente no seu navegador.
+### 6. Mapa
+O mapa `output/graficos/mapa_acidentes.html` mostra 2.159 sinistros, sem notificações, que se concentram em poucas coordenadas repetidas. Parte dos pontos restantes também pode indicar uma referência, e não o local do impacto.
 
 ---
 
-## 🛠️ Como Reproduzir este Projeto
+## 🛠️ Como Reproduzir
 
-### 1. Clonar o repositório e criar o ambiente virtual:
 ```bash
-git clone https://github.com/seu-usuario/projeto-acidentes-matao.git
-cd projeto-acidentes-matao
+git clone https://github.com/douglasagalbiatti/projeto-transito-matao.git
+cd projeto-transito-matao
 
 python -m venv .venv
 source .venv/bin/activate  # No Windows: .venv\Scripts\activate
-```
-
-### 2. Instalar as dependências:
-```bash
 pip install -r requirements.txt
 ```
 
-### 3. Execução dos Notebooks:
-Execute os notebooks na ordem cronológica de desenvolvimento:
-1. `notebooks/01-exploracao.ipynb`
-2. `notebooks/02-limpeza.ipynb`
-3. `notebooks/03-analise-matao.ipynb`
-4. `notebooks/04-visualizacoes.ipynb`
+Os notebooks 03 e 04 rodam com a base versionada. Os notebooks 01 e 02 exigem os arquivos estaduais `data/sinistros_2015-2021.csv`, `data/sinistros_2022-2024.csv` e `data/sinistros_2025-2026.csv`, que não são versionados.
+
+Para rodar o dashboard e os testes:
+
+```bash
+streamlit run app.py
+```
+
+```bash
+python -m unittest discover -s tests -t .
+```
+
+`generate_pdf.py` também exige `pip install weasyprint`.
 
 ---
 
-## 📄 Relatório Técnico Completo
-O diagnóstico formal detalhado, acompanhado de recomendações viárias para a gestão pública e análise de limitações de dados, está disponível no documento:
+## 📄 Relatório Técnico
 👉 [`output/relatorios/relatorio_final_matao.md`](output/relatorios/relatorio_final_matao.md)

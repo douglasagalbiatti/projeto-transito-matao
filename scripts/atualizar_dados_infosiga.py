@@ -21,7 +21,9 @@ from datetime import datetime
 import urllib.request
 import urllib.error
 import pandas as pd
-import numpy as np
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from src.metricas import classificar_gravidade
 
 # -----------------------------------------------------------------------------
 # Configuração de Logging
@@ -73,6 +75,9 @@ MAPA_COLUNAS = {
     'qtd_gravidade_ileso': 'ilesos'
 }
 
+# Meses recentes são baixados de novo para incorporar revisões do Infosiga.
+MESES_REVISAO = 3
+
 COLUNAS_CONTAGENS = [
     'qtd_bicicleta', 'qtd_motocicleta', 'qtd_automovel', 
     'qtd_onibus', 'qtd_caminhao', 'qtd_pedestre', 'qtd_outros_veiculos',
@@ -105,6 +110,19 @@ def extrair_mes_ano_do_nome(nome_ou_url: str):
                 return int(match_ano.group(0)), num_mes
 
     return None, None
+
+
+def periodo_do_recurso(recurso: dict):
+    """Extrai (ano, mes) da URL e, se ela não tiver a data, do nome do recurso."""
+    ano, mes = extrair_mes_ano_do_nome(recurso.get("url", ""))
+    if ano:
+        return ano, mes
+    return extrair_mes_ano_do_nome(recurso.get("name", ""))
+
+
+def mes_na_janela(ano: int, mes: int, ultimo_ano: int, ultimo_mes: int) -> bool:
+    """Indica se o mês está na janela de revisão ou é posterior ao último mês da base."""
+    return (ano * 12 + mes) > (ultimo_ano * 12 + ultimo_mes - MESES_REVISAO)
 
 
 def obter_recursos_ckan():
@@ -177,22 +195,19 @@ def processar_e_limpar_chunk_matao(df_bruto: pd.DataFrame) -> pd.DataFrame:
     """
     # 1. Filtrar código IBGE de Matão
     if "cod_ibge" in df_bruto.columns:
-        df_matao = df_bruto[df_bruto["cod_ibge"] == CODIGO_IBGE_MATAO].copy()
+        df_matao = df_bruto[pd.to_numeric(df_bruto["cod_ibge"], errors="coerce") == CODIGO_IBGE_MATAO].copy()
     else:
-        # Fallback se cod_ibge estiver formatado como string ou ausente
-        df_matao = df_bruto[df_bruto["municipio"].astype(str).str.upper() == "MATÃO"].copy()
+        # Fallback se cod_ibge estiver ausente
+        df_matao = df_bruto[df_bruto["municipio"].astype(str).str.upper().isin(["MATAO", "MATÃO"])].copy()
 
     if df_matao.empty:
         return pd.DataFrame()
 
-    # 2. Selecionar e renomear colunas
-    colunas_presentes = {k: v for k, v in MAPA_COLUNAS.items() if k in df_matao.columns}
-    df_matao = df_matao[list(colunas_presentes.keys())].rename(columns=colunas_presentes).copy()
-
-    # Garantir que todas as colunas mapeadas existam
-    for col_padrao in MAPA_COLUNAS.values():
-        if col_padrao not in df_matao.columns:
-            df_matao[col_padrao] = 0 if col_padrao in COLUNAS_CONTAGENS else None
+    # 2. Selecionar e renomear colunas; mudança no layout da fonte interrompe o pipeline
+    ausentes = sorted(set(MAPA_COLUNAS) - set(df_matao.columns))
+    if ausentes:
+        raise ValueError(f"Colunas ausentes no arquivo do Infosiga: {ausentes}")
+    df_matao = df_matao[list(MAPA_COLUNAS)].rename(columns=MAPA_COLUNAS).copy()
 
     # 3. Tratar contagens numéricas (NaN -> 0 -> int)
     for col in COLUNAS_CONTAGENS:
@@ -218,13 +233,7 @@ def processar_e_limpar_chunk_matao(df_bruto: pd.DataFrame) -> pd.DataFrame:
         df_matao["qtd_caminhao"] + df_matao["qtd_outros_veiculos"]
     )
 
-    condicoes = [
-        df_matao["mortos"] > 0,
-        df_matao["feridos_graves"] > 0,
-        df_matao["feridos_leves"] > 0
-    ]
-    rotulos = ["Com óbito", "Com feridos graves", "Com feridos leves"]
-    df_matao["gravidade"] = np.select(condicoes, rotulos, default="Sem vítimas")
+    df_matao["gravidade"] = classificar_gravidade(df_matao)
 
     df_matao["fim_de_semana"] = df_matao["dia_semana"].astype(str).str.upper().str.contains("SÁBADO|SABADO|DOMINGO")
 
@@ -236,26 +245,19 @@ def processar_e_limpar_chunk_matao(df_bruto: pd.DataFrame) -> pd.DataFrame:
 
 def processar_arquivo_bruto(caminho_csv: str) -> pd.DataFrame:
     """Lê arquivo bruto em chunks de 20.000 linhas e extrai registros de Matão."""
-    registros = []
     chunk_size = 20000
-    
-    # Testa encodings comuns no portal do Infosiga
-    encodings = ["latin1", "utf-8", "iso-8859-1"]
-    encoding_usado = "latin1"
 
-    for enc in encodings:
+    # UTF-8 é validado primeiro, pois latin1 aceita qualquer sequência de bytes
+    for enc in ["utf-8", "latin1"]:
+        registros = []
         try:
             for chunk in pd.read_csv(caminho_csv, sep=";", encoding=enc, chunksize=chunk_size, low_memory=False):
                 df_tratado = processar_e_limpar_chunk_matao(chunk)
                 if not df_tratado.empty:
                     registros.append(df_tratado)
-            encoding_usado = enc
             break
         except UnicodeDecodeError:
             continue
-        except Exception as e:
-            logger.error(f"Erro ao processar chunk de {caminho_csv} com {enc}: {e}")
-            break
 
     if registros:
         return pd.concat(registros, ignore_index=True)
@@ -306,15 +308,14 @@ def executar_pipeline(forcar_todos: bool = False) -> bool:
             continue
         url = res.get("url", "")
         nome = res.get("name", "")
-        ano, mes = extrair_mes_ano_do_nome(url or nome)
+        ano, mes = periodo_do_recurso(res)
         
         if not ano or not mes:
             continue
 
-        # Se forcar_todos for False, só pega meses iguais ou posteriores ao último existente
-        # (é bom pegar também o mês atual pois pode ter sido atualizado com dados consolidados)
+        # Se forcar_todos for False, só pega os meses novos e a janela de revisão
         if not forcar_todos and ultimo_ano and ultimo_mes:
-            if (ano < ultimo_ano) or (ano == ultimo_ano and mes < ultimo_mes):
+            if not mes_na_janela(ano, mes, ultimo_ano, ultimo_mes):
                 continue
 
         recursos_pendentes.append({
@@ -338,11 +339,16 @@ def executar_pipeline(forcar_todos: bool = False) -> bool:
 
             sucesso = baixar_arquivo(item["url"], caminho_local)
             if not sucesso:
-                logger.warning(f"Pulando {nome_arq} devido a erro no download.")
-                continue
+                # Nada é gravado: o próximo ciclo tenta o mês de novo, sem deixar lacuna
+                logger.error(f"Pipeline interrompido: falha no download de {nome_arq}.")
+                return False
 
             logger.info(f"Processando e filtrando Matão em {nome_arq}...")
-            df_mes_matao = processar_arquivo_bruto(caminho_local)
+            try:
+                df_mes_matao = processar_arquivo_bruto(caminho_local)
+            except Exception as e:
+                logger.error(f"Pipeline interrompido: erro ao processar {nome_arq}: {e}")
+                return False
             
             qtd_encontrada = len(df_mes_matao)
             logger.info(f" -> Encontrados {qtd_encontrada} sinistros para Matão em {item['mes']:02d}/{item['ano']}.")
@@ -373,6 +379,9 @@ def executar_pipeline(forcar_todos: bool = False) -> bool:
         df_combinado = pd.concat([df_atual, df_novos_concatenados], ignore_index=True)
         # Deduplica pelo 'id_sinistro' mantendo a versão mais recente dos dados
         df_final = df_combinado.drop_duplicates(subset=["id_sinistro"], keep="last").copy()
+
+    # Reclassifica toda a base com a mesma regra dos registros novos
+    df_final["gravidade"] = classificar_gravidade(df_final)
 
     # Ordenar por data e id
     df_final["data_temp"] = pd.to_datetime(df_final["data"], errors="coerce")
@@ -416,9 +425,8 @@ def verificar_novos_dados() -> bool:
     for res in recursos:
         if res.get("format", "").upper() != "CSV":
             continue
-        url = res.get("url", "")
         nome = res.get("name", "")
-        ano, mes = extrair_mes_ano_do_nome(url or nome)
+        ano, mes = periodo_do_recurso(res)
         if not ano or not mes:
             continue
         meses_disponiveis.append((ano, mes, nome))

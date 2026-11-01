@@ -1,8 +1,7 @@
-import markdown
 import weasyprint
 import os
 
-base_path = "/home/alien/Documentos/data_science/projeto_transito_matao"
+base_path = os.path.dirname(os.path.abspath(__file__))
 
 html_content = f"""
 <!DOCTYPE html>
@@ -53,7 +52,7 @@ html_content = f"""
     width: 100%;
     border-collapse: collapse;
     margin-bottom: 15px;
-    font-size: 10pt;
+    font-size: 9pt;
   }}
   th, td {{
     border: 1px solid #ddd;
@@ -68,86 +67,81 @@ html_content = f"""
 </head>
 <body>
 
-<h1>Entendendo o Trânsito de Matão: Um Olhar Sobre os Acidentes (2015–2026)</h1>
+<h1>Entendendo o Trânsito de Matão: Um Olhar Sobre os Registros (2015–2026)</h1>
 
 <h2>Introdução</h2>
-<p>Você já se perguntou como está a segurança no trânsito da nossa cidade? Entre 2015 e 2026, coletamos e analisamos informações detalhadas sobre os acidentes de trânsito em Matão. Com cerca de 85 mil habitantes e um forte setor industrial, o tráfego da nossa cidade mistura muitos carros, motocicletas, caminhões de carga e rodovias importantes (SP-310 e SP-326). O objetivo deste estudo foi descobrir onde mora o perigo e o que podemos fazer para tornar nossas ruas mais seguras.</p>
+<p>Como está a segurança no trânsito da nossa cidade? Analisamos os registros oficiais do Infosiga SP para Matão, de março de 2015 a setembro de 2026, para entender onde estão os sinais de alerta e o que ainda precisa ser verificado.</p>
 
 <h2>Os Dados</h2>
-<p>Analisamos mais de 4 mil registros oficiais do estado. Descobrimos que quase metade desses casos (47%) resultou apenas em danos materiais, ou seja, ninguém se machucou. Porém, tivemos mais de 1.700 acidentes com ferimentos leves, 286 com ferimentos graves e, infelizmente, 147 vítimas fatais nesse período (uma média de 6 a 17 mortes por ano).</p>
+<p>São 4.126 registros. Destes, 1.916 são notificações, que quase sempre vêm sem dados de vítimas e veículos. Por isso, 1.892 registros (45,9%) estão como "sem informação de vítimas", o que não significa que ninguém se feriu. Há 1.737 registros com feridos leves, 288 com feridos graves e 143 com óbito, que somam 150 vítimas fatais. Os sinistros com óbito variam de 6 a 17 por ano. Até 2018, a base só traz sinistros fatais.</p>
 
-<img src="file://{base_path}/output/graficos/acidentes_por_ano.png" alt="Evolução de acidentes por ano">
+<img src="file://{base_path}/output/graficos/acidentes_por_ano.png" alt="Evolução dos registros por ano">
 
-<h2>O Maior Perigo: Choques e Motocicletas</h2>
-<p>Quando pensamos em acidentes graves, logo imaginamos batidas entre dois carros. No entanto, os dados nos mostram que bater em obstáculos fixos (como postes e árvores) é quase 4 vezes mais letal do que bater em outro veículo. De cada sete "choques" desse tipo, um resulta em morte.</p>
+<h2>Letalidade: Atropelamentos, Choques e Colisões</h2>
+<p>Para comparar de forma justa, usamos os sinistros de 2019 em diante, sem notificações. Atropelamentos e choques têm as maiores letalidades, mas as amostras são pequenas para ordená-los. Em vias urbanas, os choques são bem mais letais que as colisões (11,11% contra 1,68%). Nas rodovias, as taxas são próximas (13,56% contra 14,29%).</p>
 
 <table>
   <tr>
-    <th>Tipo de Sinistro</th>
-    <th>Total de Casos</th>
-    <th>Óbitos</th>
-    <th>Feridos Graves</th>
-    <th>Taxa de Letalidade (%)</th>
+    <th>Tipo</th>
+    <th>Sinistros</th>
+    <th>Com óbito</th>
+    <th>Letalidade</th>
   </tr>
   <tr>
-    <td>CHOQUE</td>
-    <td>290</td>
-    <td>41</td>
-    <td>34</td>
-    <td>14,14%</td>
+    <td>Atropelamento</td>
+    <td>92</td>
+    <td>14</td>
+    <td>15,22%</td>
   </tr>
   <tr>
-    <td>ATROPELAMENTO</td>
-    <td>207</td>
-    <td>16</td>
-    <td>26</td>
-    <td>7,73%</td>
+    <td>Choque</td>
+    <td>267</td>
+    <td>32</td>
+    <td>11,99%</td>
   </tr>
   <tr>
-    <td>COLISÃO</td>
-    <td>1.506</td>
-    <td>58</td>
-    <td>176</td>
-    <td>3,85%</td>
+    <td>Outros</td>
+    <td>371</td>
+    <td>17</td>
+    <td>4,58%</td>
   </tr>
   <tr>
-    <td>OUTROS</td>
-    <td>1.367</td>
-    <td>24</td>
-    <td>45</td>
-    <td>1,76%</td>
+    <td>Colisão</td>
+    <td>1.360</td>
+    <td>38</td>
+    <td>2,79%</td>
   </tr>
 </table>
 
-<p>Outro alerta importante vai para os motociclistas. As motos estão envolvidas em um terço de todos os acidentes (33,8%), mas a presença delas é o fator número um que determina se um acidente será grave ou não.</p>
+<h2>Motocicletas</h2>
+<p>As motos aparecem em 62,2% dos registros com veículo ou pedestre informado. Em vias urbanas, 16,9% dos sinistros com moto são graves ou fatais, contra 12,3% dos sem moto. Nas rodovias, as taxas são iguais (29,8% e 29,6%). A base não mostra em qual veículo cada vítima estava, então não permite medir o risco individual do motociclista.</p>
 
-<img src="file://{base_path}/output/graficos/tipos_e_veiculos.png" alt="Acidentes por tipos e veículos">
-<img src="file://{base_path}/output/graficos/importancia_features_ml.png" alt="Fatores mais importantes na severidade">
+<img src="file://{base_path}/output/graficos/tipos_e_veiculos.png" alt="Registros por tipo e veículo">
 
-<h2>Horários de Maior Atenção</h2>
-<p>A correria do dia a dia dita o ritmo dos acidentes. O horário de maior perigo em Matão é o fim da tarde, entre as 17h e as 19h, exatamente quando as pessoas estão saindo do trabalho, das indústrias e do comércio. Também há um aumento notável por volta das 13h.</p>
-<p>Ao contrário do que se possa imaginar, a média diária de acidentes é quase a mesma nos finais de semana em comparação aos dias úteis (cerca de 2 acidentes por dia). A diferença é que, de segunda a sexta, eles se concentram no horário de pico, enquanto no fim de semana acontecem de forma mais espalhada, invadindo a noite e a madrugada.</p>
+<h2>Horários e Dias</h2>
+<p>Os maiores volumes ocorrem às 17h, 18h e 19h, mas não há dado de fluxo de veículos para dizer se esse é o horário de maior risco. Essas horas têm 22,4% dos registros e 21,7% dos sinistros fatais.</p>
+<p>Contando todos os dias do calendário desde 2019, a média é de 1,42 registro por dia útil e 1,51 por dia de fim de semana (p = 0,107), resultado que não demonstra diferença nem prova igualdade. Sexta (1,66) e sábado (1,68) ficam acima dos demais dias. No fim de semana, 20,8% dos registros ocorrem entre 22h e 5h, contra 11,0% nos dias úteis.</p>
 
-<img src="file://{base_path}/output/graficos/acidentes_dia_e_hora.png" alt="Acidentes por dia e hora">
-<img src="file://{base_path}/output/graficos/heatmap_dia_hora.png" alt="Mapa de calor de acidentes">
+<img src="file://{base_path}/output/graficos/acidentes_dia_e_hora.png" alt="Registros por dia e hora">
+<img src="file://{base_path}/output/graficos/heatmap_dia_hora.png" alt="Mapa de calor de registros">
 
 <h2>Onde Acontecem?</h2>
-<p>Mapeamos todos esses acidentes. Dentro da cidade e nos bairros, vemos muitos acidentes, mas na maioria das vezes com danos menores, pois as velocidades são mais baixas. O verdadeiro risco à vida está nas rodovias e nos trevos de acesso à cidade, como os da Avenida Baldan e Avenida Trolesi, além da região do Distrito Industrial. É lá que ocorrem quase todas as fatalidades.</p>
+<p>As vias urbanas têm 82 dos 150 óbitos (55%), e as estradas e rodovias, 61 (41%). As rodovias têm menos registros, porém maior letalidade por registro: 14,7% contra 2,2%. Este estudo não analisa trevos específicos.</p>
 
-<h2>O Que Podemos Fazer? (Recomendações)</h2>
-<p>Diante disso, algumas ações podem salvar vidas:</p>
+<h2>O Que Verificar e Fazer</h2>
+<p>As ações abaixo são hipóteses a validar, pois a base não mede velocidade, álcool nem fluxo de veículos:</p>
 <ul>
-  <li><strong>Ruas e Rodovias:</strong> Instalar proteções ao redor de postes e árvores nas avenidas principais, melhorar a iluminação e a sinalização nos trevos, e criar espaços exclusivos de parada para motos nos semáforos.</li>
-  <li><strong>Fiscalização:</strong> Redobrar a atenção com radares de velocidade nos horários críticos (17h-19h) e realizar operações durante as madrugadas dos finais de semana.</li>
-  <li><strong>Conscientização:</strong> Promover palestras e campanhas nas grandes empresas da cidade, incentivando o uso correto de capacetes e equipamentos de proteção.</li>
+  <li><strong>Ruas e Rodovias:</strong> inspecionar os locais de choque urbano e os pontos de óbito na SP-310 e na SP-326 antes de definir obras.</li>
+  <li><strong>Fiscalização:</strong> medir a velocidade nas vias com mais óbitos e testar operações nas noites de sexta e sábado, avaliando o resultado.</li>
+  <li><strong>Conscientização:</strong> promover campanhas de direção defensiva e uso correto de capacetes e equipamentos de proteção.</li>
 </ul>
 
 <h2>Conclusão</h2>
-<p>Os números mostram que o trânsito de Matão exige atenção especial, especialmente nos trevos e nos finais de tarde. Com cuidado redobrado, melhorias nas vias e respeito às regras, podemos reduzir os acidentes e garantir que todos voltem para casa em segurança.</p>
+<p>Os dados indicam onde olhar primeiro: óbitos nas vias urbanas e nas rodovias, choques urbanos e noites de sexta e sábado. Melhorar a qualidade dos registros é parte do trabalho, porque quase metade da base não informa o desfecho.</p>
 
 </body>
 </html>
 """
 
-pdf = weasyprint.HTML(string=html_content).write_pdf(f"{base_path}/relatorio_ciencia_de_dados_matao.pdf")
+pdf = weasyprint.HTML(string=html_content).write_pdf(f"{base_path}/output/relatorios/relatorio_ciencia_de_dados_matao.pdf")
 print("PDF gerado com sucesso com gráficos e tabelas incluídos!")

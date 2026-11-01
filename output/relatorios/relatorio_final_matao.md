@@ -1,108 +1,139 @@
 # Relatório Executivo: Análise e Diagnóstico de Sinistros de Trânsito em Matão/SP (2015–2026)
 
 **Autor:** Análise de Ciência de Dados  
-**Data:** Setembro de 2026  
+**Data:** Novembro de 2026 (revisão do relatório de setembro de 2026)  
 **Fonte de Dados:** Infosiga SP (Movimento Paulista de Segurança no Trânsito)  
 **Abrangência:** Município de Matão / SP (Código IBGE: 3529302)  
+**Recorte:** 18/03/2015 a 29/09/2026  
+
+> **Nota de revisão:** esta versão substitui conclusões da versão de setembro de 2026 sobre média diária, letalidade, rodovias, vias críticas e motocicletas. O relatório em PDF de setembro de 2026 e a matéria publicada mantêm os textos anteriores; veja `output/relatorios/ERRATA.md`.
 
 ---
 
 ## 1. Contexto e Objetivos
 
-Matão é um polo industrial e agrícola estratégico localizado no centro-norte do Estado de São Paulo, contando com cerca de 85 mil habitantes. O município abriga grandes indústrias dos setores metalmecânico, agrícola e citrícola (como Marchesan, Baldan e Citrosuco), além de ser cortado por dois eixos rodoviários de relevância estadual: a **SP-310 (Rodovia Washington Luís)** e a **SP-326 (Rodovia Brigadeiro Faria Lima)**.
+Matão é um polo industrial e agrícola localizado no centro-norte do Estado de São Paulo. O município abriga indústrias como Marchesan, Baldan e Citrosuco e é cortado pela **SP-310 (Rodovia Washington Luís)** e pela **SP-326 (Rodovia Brigadeiro Faria Lima)**.
 
-A combinação entre fluxo de veículos de carga de grande porte, expressiva frota de motocicletas utilizada para deslocamento de trabalhadores e travessias urbanas/rodoviárias torna a segurança viária um tema crítico de saúde pública e gestão urbana.
-
-O objetivo deste estudo foi conduzir um diagnóstico aprofundado dos sinistros de trânsito em Matão ao longo de mais de 11 anos, identificando:
-- Padrões de evolução temporal e sazonalidade;
-- Os tipos de acidentes e modais de transporte mais vulneráveis;
-- A geografia do risco e as vias mais letais;
-- A viabilidade de predição da gravidade dos sinistros via Machine Learning.
+O estudo buscou descrever:
+- A evolução temporal e a distribuição por dia e hora;
+- Os tipos de sinistro e os modais envolvidos;
+- A distribuição dos óbitos entre vias urbanas e rodovias;
+- O que um modelo de Machine Learning consegue extrair das variáveis disponíveis.
 
 ---
 
 ## 2. Metodologia e Processamento de Dados
 
-### 2.1 Coleta e Engenharia de Dados
-Os dados brutos foram obtidos do repositório público do **Infosiga SP**, divididos em três períodos:
-1. `sinistros_2015-2021.csv`
-2. `sinistros_2022-2024.csv`
-3. `sinistros_2025-2026.csv`
+### 2.1 Coleta
+Os dados vêm do **Infosiga SP**. Os arquivos estaduais foram lidos em lotes de 20.000 linhas e filtrados por `cod_ibge == 3529302`, resultando em **4.126 registros** nesta atualização. Os meses recentes são baixados novamente a cada ciclo para incorporar revisões da fonte.
 
-Dado que os arquivos originais compreendem todo o Estado de São Paulo (totalizando cerca de 400 MB de dados brutos), implementou-se um pipeline de ingestão em **lotes (*chunks*) de 20.000 linhas**. O processo filtrou exclusivamente os registros com `cod_ibge == 3529302` ou `municipio == 'MATAO'`, consolidando um dataset tratado de **4.074 sinistros** ocupando menos de 800 KB de memória e disco.
+### 2.2 Tratamento
+- **Contagens vazias:** viram `0`. Isso pode subestimar envolvidos: 99 de 211 atropelamentos têm `qtd_pedestre = 0`.
+- **Coordenadas:** 3.698 registros têm coordenadas, e 3.692 estão na região de Matão. Coordenadas exatas se repetem muito: 1.066 registros estão em 40 pontos, e parte deles pode indicar uma referência, e não o local do impacto.
+- **Gravidade:** `Com óbito`, `Com feridos graves`, `Com feridos leves`, `Sem feridos (ilesos registrados)` e `Sem informação de vítimas`.
 
-### 2.2 Tratamento e Limpeza
-- **Tratamento de Nulos:** Em variáveis de contagem de veículos (`qtd_motocicleta`, `qtd_automovel`, etc.) e vítimas (`qtd_gravidade_*`), valores ausentes (`NaN`) foram imputados como `0` e convertidos para inteiros.
-- **Normalização de Coordenadas:** Valores de latitude e longitude com separador decimal em vírgula foram higienizados e convertidos para ponto flutuante, alcançando **3.648 sinistros georreferenciados válidos** (quase 90% da base).
-- **Classificação de Gravidade:** Criação da variável categórica hierárquica `gravidade` (`Com óbito`, `Com feridos graves`, `Com feridos leves`, `Sem vítimas`).
-
-### 2.3 Ressalva Metodológica Fundamental
-Entre **2015 e 2018**, o Infosiga registrava exclusivamente sinistros que resultavam em óbito. A partir de **2019**, com a integração de dados da Polícia Militar, SAMU e Corpo de Bombeiros, o sistema passou a registrar também sinistros não fatais e notificações. Portanto:
-- A análise do volume total de sinistros é comparável de **2019 em diante**;
-- A série histórica de **sinistros fatais e óbitos é contínua e comparável de 2015 a 2026**.
+### 2.3 Ressalvas Metodológicas
+- **2015 a 2018:** só há sinistros fatais. Calcular letalidade com esses anos a infla.
+- **Notificações:** são 1.916 registros, quase sempre sem dados de vítimas e veículos. Sua participação varia de 84% (2019) a 22% (2021) e 61% (2026), e parte pode repetir sinistros já registrados: há ao menos 20 grupos com mesma data, hora e via. A definição oficial do tipo de registro deve ser conferida no dicionário do Infosiga.
+- **Base comparável:** letalidade, gravidade por modal e modelo usam **sinistros de 2019 em diante, sem notificações**. Mesmo assim, os totais anuais não medem tendência, porque 2019 tem só 73 sinistros fora das notificações.
+- **Exposição:** não há fluxo de veículos nem frota, então volume não equivale a risco.
 
 ---
 
 ## 3. Principais Descobertas
 
-### 3.1 Distribuição da Gravidade das Ocorrências
-No acumulado histórico de 4.074 sinistros em Matão:
-- **Sem vítimas (apenas danos materiais/notificações):** 1.920 ocorrências (47,13%)
-- **Com feridos leves:** 1.726 ocorrências (42,37%)
-- **Com feridos graves:** 286 ocorrências (7,02%)
-- **Com óbito:** 142 ocorrências (3,49%) — totalizando **147 vítimas fatais** registradas.
+### 3.1 Desfecho dos Registros
+| Desfecho | Registros | % |
+| :--- | :---: | :---: |
+| Sem informação de vítimas | 1.892 | 45,9% |
+| Com feridos leves | 1.737 | 42,1% |
+| Com feridos graves | 288 | 7,0% |
+| Com óbito | 143 | 3,5% |
+| Sem feridos (ilesos registrados) | 66 | 1,6% |
 
-### 3.2 O Perigo Crítico do "Choque" contra Obstáculos Fixos
-Ao analisar o cruzamento entre o tipo de evento e o desfecho:
-| Tipo de Sinistro | Total de Ocorrências | Óbitos | Feridos Graves | Taxa de Letalidade (%) |
-| :--- | :---: | :---: | :---: | :---: |
-| **CHOQUE** | 290 | 41 | 34 | **14,14%** |
-| **ATROPELAMENTO** | 207 | 16 | 26 | **7,73%** |
-| **COLISÃO** | 1.506 | 58 | 176 | **3,85%** |
-| **OUTROS** | 1.367 | 24 | 45 | **1,76%** |
-| **NÃO DISPONÍVEL** | 704 | 3 | 5 | **0,43%** |
+Os 143 registros com óbito somam **150 vítimas fatais**. Os 1.892 registros sem informação não permitem afirmar que ninguém se feriu. Dois registros fatais de 01/05/2026, na mesma vicinal, podem ser o mesmo sinistro e precisam de conferência.
 
-> **Destaque:** Embora colisões sejam o evento mais volumoso, **o choque contra obstáculo fixo (postes, árvores, muretas) é quase 4 vezes mais letal que uma colisão veicular**. Quase 1 a cada 7 choques resulta em morte em Matão, apontando para excesso de velocidade e perda de controle.
+### 3.2 Letalidade por Tipo de Sinistro (base comparável)
+Letalidade = sinistros com óbito ÷ sinistros do tipo.
 
-### 3.3 Modais: A Vulnerabilidade Extrema da Motocicleta
-- **Automóveis** estiveram envolvidos em 1.480 acidentes (36,3%).
-- **Motocicletas** estiveram envolvidas em 1.375 acidentes (33,8%).
-- **Caminhões** estiveram em 208 acidentes (5,1%), pedestres em 112 (2,7%) e bicicletas em 88 (2,2%).
+| Tipo de Sinistro | Sinistros | Com óbito | Óbitos (pessoas) | Feridos graves (pessoas) | Letalidade |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **ATROPELAMENTO** | 92 | 14 | 14 | 24 | **15,22%** |
+| **CHOQUE** | 267 | 32 | 33 | 36 | **11,99%** |
+| **OUTROS** | 371 | 17 | 18 | 47 | **4,58%** |
+| **COLISÃO** | 1.360 | 38 | 40 | 182 | **2,79%** |
+| **NÃO DISPONÍVEL** | 78 | 0 | 0 | 5 | **0,00%** |
 
-Na modelagem preditiva supervisionada (Random Forest Classifier, acurácia de 79%), a variável **`qtd_motocicleta` despontou isolada como a característica mais importante (Gini Importance ~ 0,17)** para determinar a gravidade do acidente, superando variáveis como horário, tipo de via e volume de automóveis.
+No conjunto, a letalidade do choque é **4,29 vezes** a da colisão (IC95% 2,73 a 6,74), mas a diferença é urbana:
+
+| Via | Choque | Colisão |
+| :--- | :---: | :---: |
+| Vias urbanas | 11,11% (23/207) | 1,68% (21/1.247) |
+| Estradas e rodovias | 13,56% (8/59) | 14,29% (16/112) |
+
+Atropelamento e choque não podem ser ordenados com segurança, pois as amostras são pequenas. A base não informa a velocidade nem qual objeto foi atingido.
+
+### 3.3 Modais
+Entre os 2.223 registros com veículo ou pedestre informado, automóveis aparecem em 67,1%, motocicletas em 62,2%, caminhões em 9,4%, pedestres em 5,0%, bicicletas em 4,0% e ônibus em 1,5%.
+
+A proporção de sinistros graves ou fatais com e sem moto, na base comparável, depende da via:
+
+| Via | Com moto | Sem moto |
+| :--- | :---: | :---: |
+| Vias urbanas | 16,9% | 12,3% |
+| Estradas e rodovias | 29,8% | 29,6% |
+
+A base não liga cada vítima ao seu veículo. Ela não permite concluir que o motociclista é a figura mais vulnerável nem que a moto é o principal fator de gravidade.
 
 ### 3.4 Padrões Temporais
-- **Horário de Pico Absoluto:** O período entre **17h e 19h** concentra o maior volume de acidentes da cidade (pico às 17h com 347 sinistros), correspondendo ao término da jornada de trabalho nas indústrias e comércio. Há um pico secundário às **13h** (retorno do almoço).
-- **Dias Úteis vs Finais de Semana:** A aplicação do **teste t de Student** revelou que a média diária de acidentes é estatisticamente indiferente entre dias úteis (**2,03 acidentes/dia**) e finais de semana (**2,04 acidentes/dia**), com $p\text{-valor} = 0,76$. A diferença reside no horário: dias úteis concentram-se no horário comercial/rush, enquanto fins de semana dispersam-se pela noite e madrugada.
+- **Horas:** os maiores volumes ocorrem às 17h (350), 18h (305) e 19h (268), seguidos das 13h (258). Essas três primeiras horas concentram 22,4% dos registros e 21,7% dos sinistros fatais, portanto o maior volume não indica maior proporção de mortes.
+- **Dias úteis e fins de semana:** contando todos os dias do calendário desde 2019, inclusive os 29,1% sem registro, as médias são **1,42** e **1,51 registros/dia**. A diferença é de 0,09 (IC95% -0,02 a 0,21; teste de Welch, p = 0,107). O resultado não demonstra diferença nem prova igualdade.
+- **Dias da semana:** sexta (1,66) e sábado (1,68) superam os demais dias (1,32 a 1,39). Esse contraste foi observado depois de ver os dados, então deve ser confirmado em novos períodos.
+- **Madrugada:** 20,8% dos registros de fim de semana ocorrem entre 22h e 5h, contra 11,0% nos dias úteis.
 
-### 3.5 Geografia da Severidade Viária
-A visualização geoespacial interativa evidenciou dois comportamentos espaciais distintos:
-1. **Malha Urbana Central e Bairros:** Apresenta densa concentração de acidentes, porém com predomínio de danos materiais e feridos leves (menor velocidade operacional).
-2. **Eixos Rodoviários (SP-310 e SP-326) e Trevos:** Concentram a esmagadora maioria dos sinistros com óbito. Destacam-se como zonas de alto risco os entroncamentos de acesso à cidade (trevos da Av. Baldan e Av. Trolesi) e o trecho próximo ao Distrito Industrial Adolfo Baldan.
+As relações com saída de fábricas, retorno do almoço e álcool são hipóteses, pois não são medidas aqui.
+
+### 3.5 Geografia
+- **Vias urbanas:** têm **82 dos 150 óbitos (55%)**, com letalidade de 2,2% na base completa.
+- **Estradas e rodovias:** têm **61 óbitos (41%)**, com letalidade de 14,7%. SP-310 e SP-326 somam 59 óbitos. Outros 7 óbitos estão sem tipo de via informado.
+- **Vias com mais sinistros, sem notificações:** SP-310 (202), Avenida Baldan (123), Rua Sinharinha Frota (107) e Rua Rui Barbosa (107).
+
+Com notificações, a Rua Sinharinha Frota lideraria (473), mas 77% dos registros são notificações, e o endereço do hospital fica nessa rua. Há indício de local de atendimento registrado como local do sinistro, ainda sem confirmação. Por isso, ela não deve ser tratada como a via mais crítica. Este estudo não analisa trevos específicos.
+
+### 3.6 Modelo de Machine Learning
+Um Random Forest treinado na base comparável obteve **78,8% de acurácia, igual à referência de sempre prever a classe mais comum**, e 20,0% de acurácia balanceada. Ele previu feridos leves em todo o conjunto de teste e não identificou nenhum óbito ou ferido grave.
+
+**As variáveis disponíveis não sustentam previsão de gravidade.** A importância de permutação foi baixa (motocicleta 0,020; via urbana 0,014; automóvel 0,014), não indica sentido nem causa, e o modelo usa dados conhecidos só depois do sinistro.
 
 ---
 
-## 4. Recomendações para Segurança no Trânsito
+## 4. Recomendações
 
-Com base nas evidências empíricas levantadas, propõem-se ações estruturadas nos três pilares da segurança viária:
+As ações abaixo são hipóteses a validar com contagem de tráfego, inspeção em campo e dados de velocidade e alcoolemia.
 
 ### A. Engenharia de Tráfego
-- **Atenuação de Impacto em Obstáculos Fixos:** Mapeamento de postes e árvores sem recuo no leito carroçável das principais avenidas arteriais de Matão, instalando defensas metálicas ou barreiras absorvedoras de impacto.
-- **Readequação Geométrica dos Trevos Rodoviários:** Melhoria na sinalização horizontal refletiva e reforço de iluminação nos acessos da SP-310 e SP-326 ao perímetro urbano.
-- **Espaço para Motociclistas:** Implantação de bolsões de parada exclusivos para motos à frente dos semáforos (*bike/moto boxes*) nos cruzamentos de maior fluxo.
+- **Choques urbanos:** inspecionar os locais de choque em vias urbanas e identificar os objetos atingidos antes de instalar defensas.
+- **Rodovias:** avaliar com a concessionária ou o órgão responsável os pontos de óbito na SP-310 e na SP-326.
+- **Motocicletas:** avaliar bolsões de parada nos cruzamentos de maior fluxo.
 
 ### B. Fiscalização e Monitoramento
-- **Radares nos Corredores Arteriais:** Monitoramento eletrônico de velocidade nas vias de escoamento industrial durante as janelas de pico (17h–19h e 12h–13h).
-- **Operações de Fim de Semana:** Fiscalização noturna e de madrugada com foco em alcoolemia e direção perigosa nas sextas, sábados e domingos.
+- **Velocidade:** medir a velocidade nas vias com mais óbitos antes de definir locais e horários de radares.
+- **Noites de sexta e sábado:** testar operações nas noites com mais registros, medindo o resultado.
+- **Qualidade do dado:** conferir com o Infosiga as notificações e os registros associados ao hospital.
 
 ### C. Educação e Conscientização
-- **Campanhas Focadas em Empresas e Trabalhadores:** Parcerias com as grandes indústrias de Matão para palestras e conscientização sobre direção defensiva e uso correto de equipamentos de proteção (capacete afivelado, jaqueta e calçados adequados).
+- **Empresas e trabalhadores:** promover campanhas de direção defensiva e uso correto de equipamentos de proteção.
 
 ---
 
 ## 5. Limitações do Estudo
-- **Subnotificação de Danos Materiais:** Acidentes leves resolvidos por acordo verbal entre motoristas, sem intervenção das forças públicas, não constam na base.
-- **Falta de Variáveis Comportamentais:** O banco do Infosiga não audita telemetria (velocidade no instante exato do impacto), consumo de substâncias psicoativas ou condição de manutenção preventiva do veículo.
+- **Subnotificação:** sinistros leves resolvidos sem acionar os órgãos públicos não constam na base.
+- **Notificações:** faltam dados de vítimas e veículos, e pode haver duplicidade.
+- **Vítima sem veículo:** a base não indica em qual veículo cada vítima estava.
+- **Falta de exposição:** não há fluxo de veículos nem frota.
+- **Falta de variáveis comportamentais:** não há velocidade, consumo de álcool ou manutenção veicular.
+- **Localização:** coordenadas e nomes de vias têm repetições e grafias diferentes.
+- **Dados recentes:** o último ano é parcial e está sujeito a revisões.
 
 ---
 
@@ -110,4 +141,4 @@ Com base nas evidências empíricas levantadas, propõem-se ações estruturadas
 - **Base Limpa Consolidada:** `data/matao_limpo.csv`
 - **Resumo Anual Estatístico:** `output/relatorios/resumo_anual_matao.csv`
 - **Mapa Geoespacial Interativo:** `output/graficos/mapa_acidentes.html`
-- **Gráficos em Alta Resolução:** `output/graficos/*.png`
+- **Gráficos:** `output/graficos/*.png`
