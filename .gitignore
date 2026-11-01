@@ -21,3 +21,7 @@ __pycache__/
 
 # Palco - dados locais de configuração e decks
 .palco/
+# Arquivos gerados pesados: publicados na branch 'artefatos', substituída a cada atualização
+output/graficos/
+output/notebooks/
+output/relatorios/relatorio_ciencia_de_dados_matao.pdf

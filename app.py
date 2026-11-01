@@ -4,12 +4,8 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.inspection import permutation_importance
-from sklearn.metrics import accuracy_score, balanced_accuracy_score
-from sklearn.model_selection import train_test_split
-
 from src.metricas import (
+    caminho_grafico,
     ORDEM_GRAVIDADE,
     SEM_FERIDOS,
     SEM_INFORMACAO,
@@ -20,12 +16,13 @@ from src.metricas import (
     razao_letalidade,
     tabela_letalidade,
 )
+from src.modelo import treinar_modelo
 
 # -----------------------------------------------------------------------------
 # 1. Configuração da Página
 # -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Sinistros de Trânsito — Matão/SP (2015–2026)",
+    page_title="Sinistros de Trânsito — Matão/SP",
     page_icon="🚦",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -94,7 +91,7 @@ def mostrar_grafico(fig):
 # -----------------------------------------------------------------------------
 # 2. Carregamento de Dados com Cache
 # -----------------------------------------------------------------------------
-@st.cache_data
+@st.cache_data(ttl="1h")
 def carregar_dados_principais():
     caminho = "data/matao_limpo.csv"
     if not os.path.exists(caminho):
@@ -103,14 +100,14 @@ def carregar_dados_principais():
     df = pd.read_csv(caminho, parse_dates=["data"])
     return df
 
-@st.cache_data
+@st.cache_data(ttl="1h")
 def carregar_resumo_anual():
     caminho = "output/relatorios/resumo_anual_matao.csv"
     if os.path.exists(caminho):
         return pd.read_csv(caminho)
     return pd.DataFrame()
 
-@st.cache_data
+@st.cache_data(ttl="1h")
 def carregar_texto_relatorio():
     caminho = "output/relatorios/relatorio_final_matao.md"
     if os.path.exists(caminho):
@@ -118,38 +115,9 @@ def carregar_texto_relatorio():
             return f.read()
     return ""
 
-@st.cache_resource
+@st.cache_resource(ttl="1h")
 def treinar_modelo_rf(df):
-    """Treina e avalia o Random Forest na base comparável, com conjunto de teste separado."""
-    features_cat = ['tipo_sinistro', 'tipo_via', 'dia_semana', 'turno']
-    features_num = ['hora_int', 'mes', 'qtd_motocicleta', 'qtd_automovel', 'qtd_caminhao', 'qtd_pedestre', 'qtd_bicicleta']
-    
-    df_ml = base_comparavel(df)[features_cat + features_num + ['gravidade']].dropna().copy()
-    # Classes com poucos casos impedem a divisão estratificada
-    df_ml = df_ml[df_ml['gravidade'].map(df_ml['gravidade'].value_counts()) >= 10]
-    if df_ml.empty:
-        return None
-        
-    X = pd.get_dummies(df_ml[features_cat + features_num], columns=features_cat, drop_first=True)
-    y = df_ml['gravidade']
-    X_treino, X_teste, y_treino, y_teste = train_test_split(X, y, test_size=0.30, random_state=42, stratify=y)
-    
-    # Sem class_weight, para que predict_proba reflita a frequência das classes
-    clf = RandomForestClassifier(n_estimators=150, max_depth=10, min_samples_leaf=5, random_state=42)
-    clf.fit(X_treino, y_treino)
-    pred = clf.predict(X_teste)
-    
-    permutacao = permutation_importance(clf, X_teste, y_teste, n_repeats=10, random_state=42, scoring='neg_log_loss')
-    importancias = pd.Series(permutacao.importances_mean, index=X.columns).sort_values(ascending=True)
-    return {
-        'modelo': clf,
-        'importancias': importancias,
-        'features': X.columns.tolist(),
-        'n_teste': len(y_teste),
-        'acuracia': accuracy_score(y_teste, pred),
-        'acuracia_balanceada': balanced_accuracy_score(y_teste, pred),
-        'referencia': y_teste.value_counts(normalize=True).max(),
-    }
+    return treinar_modelo(df)
 
 df_completo = carregar_dados_principais()
 df_resumo_anual = carregar_resumo_anual()
@@ -254,7 +222,8 @@ st.sidebar.info("""
 # -----------------------------------------------------------------------------
 # 4. Cabeçalho Principal e Contexto Executivo
 # -----------------------------------------------------------------------------
-st.title("🚗 Diagnóstico e Análise de Sinistros de Trânsito — Matão/SP (2015–2026)")
+PERIODO = f"{int(df_completo['ano'].min())}–{int(df_completo['ano'].max())}"
+st.title(f"🚗 Diagnóstico e Análise de Sinistros de Trânsito — Matão/SP ({PERIODO})")
 st.markdown("**Observatório de Segurança Viária baseado nos microdados públicos do Infosiga SP**")
 
 with st.container(border=True):
@@ -367,7 +336,7 @@ with tab1:
         
         fig_ano.update_layout(
             barmode='stack',
-            title="<b>Evolução dos Registros e Óbitos em Matão/SP (2015–2026)</b>",
+            title=f"<b>Evolução dos Registros e Óbitos em Matão/SP ({PERIODO})</b>",
             xaxis=dict(title="Ano", tickmode='linear', tick0=2015, dtick=1, tickformat='d'),
             yaxis=dict(title="Total de Registros", showgrid=True),
             yaxis2=dict(
@@ -418,8 +387,7 @@ with tab1:
         st.dataframe(formatar_tabela(df_show_anual, sem_milhar=["Ano"]), width="stretch", hide_index=True)
     
     with st.expander("🖼️ Ver Gráfico Estático (acidentes_por_ano.png)"):
-        if os.path.exists("output/graficos/acidentes_por_ano.png"):
-            st.image("output/graficos/acidentes_por_ano.png", caption="Figura 1: Sinistros, notificações e óbitos por ano (Matplotlib)", width="stretch", alt="Evolução anual dos sinistros")
+        st.image(caminho_grafico("acidentes_por_ano.png"), caption="Figura 1: Sinistros, notificações e óbitos por ano (Matplotlib)", width="stretch", alt="Evolução anual dos sinistros")
 
 # =============================================================================
 # ABA 2: Tipos de Sinistro & Choque Crítico
@@ -560,8 +528,7 @@ with tab3:
         mostrar_grafico(fig_comp)
 
     with st.expander("🖼️ Ver Gráfico Estático (tipos_e_veiculos.png)"):
-        if os.path.exists("output/graficos/tipos_e_veiculos.png"):
-            st.image("output/graficos/tipos_e_veiculos.png", caption="Figura 2: Tipos de sinistro e veículos envolvidos (Matplotlib)", width="stretch", alt="Tipos de sinistro e veículos")
+        st.image(caminho_grafico("tipos_e_veiculos.png"), caption="Figura 2: Tipos de sinistro e veículos envolvidos (Matplotlib)", width="stretch", alt="Tipos de sinistro e veículos")
 
 # =============================================================================
 # ABA 4: Padrões Temporais & Teste Estatístico
@@ -669,11 +636,9 @@ with tab4:
     with st.expander("🖼️ Ver Gráficos Estáticos (heatmap_dia_hora.png e acidentes_dia_e_hora.png)"):
         col_img1, col_img2 = st.columns(2)
         with col_img1:
-            if os.path.exists("output/graficos/heatmap_dia_hora.png"):
-                st.image("output/graficos/heatmap_dia_hora.png", caption="Mapa de calor original", width="stretch", alt="Mapa de calor")
+            st.image(caminho_grafico("heatmap_dia_hora.png"), caption="Mapa de calor original", width="stretch", alt="Mapa de calor")
         with col_img2:
-            if os.path.exists("output/graficos/acidentes_dia_e_hora.png"):
-                st.image("output/graficos/acidentes_dia_e_hora.png", caption="Distribuição de dia e hora original", width="stretch", alt="Acidentes dia e hora")
+            st.image(caminho_grafico("acidentes_dia_e_hora.png"), caption="Distribuição de dia e hora original", width="stretch", alt="Acidentes dia e hora")
 
 # =============================================================================
 # ABA 5: Geografia (Mapa Interativo & Vias)
@@ -774,9 +739,8 @@ with tab5:
         fig_rank.update_layout(height=360, margin=dict(l=20, r=20, t=40, b=20), yaxis=dict(title=""))
         mostrar_grafico(fig_rank)
 
-    with st.expander("🖼️ Ver Mapa Estático de setembro de 2026, não atualizado (mapa_estatico_matao.png)"):
-        if os.path.exists("output/graficos/mapa_estatico_matao.png"):
-            st.image("output/graficos/mapa_estatico_matao.png", caption="Mapa estático de calor e pontos em Matão/SP", width="stretch", alt="Mapa estático de Matão")
+    with st.expander("🖼️ Ver Mapa Estático (mapa_estatico_matao.png)"):
+        st.image(caminho_grafico("mapa_estatico_matao.png"), caption="Mapa estático dos sinistros em Matão/SP, sem notificações", width="stretch", alt="Mapa estático de Matão")
 
 # =============================================================================
 # ABA 6: Machine Learning & Simulador
@@ -880,8 +844,7 @@ with tab6:
             st.dataframe(formatar_tabela(df_prob, casas={"Estimativa do modelo (%)": 1}), width="stretch", hide_index=True)
 
     with st.expander("🖼️ Ver Gráfico Estático (importancia_features_ml.png)"):
-        if os.path.exists("output/graficos/importancia_features_ml.png"):
-            st.image("output/graficos/importancia_features_ml.png", caption="Figura 5: Importância de permutação no Random Forest", width="stretch", alt="Importância das features")
+        st.image(caminho_grafico("importancia_features_ml.png"), caption="Figura 5: Importância de permutação no Random Forest", width="stretch", alt="Importância das features")
 
 # =============================================================================
 # ABA 7: Recomendações & Conclusões
@@ -993,4 +956,4 @@ with tab8:
 # Rodapé Institucional
 # -----------------------------------------------------------------------------
 st.markdown("---")
-st.caption("Desenvolvido para o Observatório de Trânsito de Matão/SP • Dados Oficiais do Infosiga SP (2015–2026) • Tecnologia: Streamlit, Plotly e Scikit-Learn")
+st.caption(f"Desenvolvido para o Observatório de Trânsito de Matão/SP • Dados Oficiais do Infosiga SP ({PERIODO}) • Tecnologia: Streamlit, Plotly e Scikit-Learn")

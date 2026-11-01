@@ -1,0 +1,159 @@
+<!-- Gerado por scripts/gerar_artefatos.py. Para mudar o texto, edite templates/relatorio_final_matao.md.j2. -->
+# Relatório Executivo: Análise e Diagnóstico de Sinistros de Trânsito em Matão/SP ({{ i.ano_inicio }}–{{ i.ano_fim }})
+
+**Autor:** Análise de Ciência de Dados  
+**Fonte de Dados:** Infosiga SP (Movimento Paulista de Segurança no Trânsito)  
+**Abrangência:** Município de Matão / SP (Código IBGE: 3529302)  
+**Recorte:** {{ i.data_inicio }} a {{ i.data_fim }}  
+
+> **Atualização automática:** números e conclusões condicionais são recalculados a cada novo mês de dados. A interpretação continua exigindo revisão humana. O relatório em PDF de setembro de 2026 e a matéria publicada mantêm os textos anteriores; veja `output/relatorios/ERRATA.md`.
+
+---
+
+## 1. Contexto e Objetivos
+
+Matão é um polo industrial e agrícola localizado no centro-norte do Estado de São Paulo. O município abriga indústrias como Marchesan, Baldan e Citrosuco e é cortado pela **SP-310 (Rodovia Washington Luís)** e pela **SP-326 (Rodovia Brigadeiro Faria Lima)**.
+
+O estudo buscou descrever:
+- A evolução temporal e a distribuição por dia e hora;
+- Os tipos de sinistro e os modais envolvidos;
+- A distribuição dos óbitos entre vias urbanas e rodovias;
+- O que um modelo de Machine Learning consegue extrair das variáveis disponíveis.
+
+---
+
+## 2. Metodologia e Processamento de Dados
+
+### 2.1 Coleta
+Os dados vêm do **Infosiga SP**. Os arquivos estaduais são lidos em lotes de 20.000 linhas e filtrados por `cod_ibge == 3529302`, resultando em **{{ i.total|br }} registros** nesta atualização. Os meses recentes são baixados novamente a cada ciclo para incorporar revisões da fonte.
+
+### 2.2 Tratamento
+- **Contagens vazias:** viram `0`. Isso pode subestimar envolvidos: {{ i.atropelamentos_sem_pedestre|br }} de {{ i.atropelamentos_total|br }} atropelamentos têm `qtd_pedestre = 0`.
+- **Coordenadas:** {{ i.com_coordenadas|br }} registros têm coordenadas, e {{ i.coordenadas_na_regiao|br }} estão na região de Matão. Coordenadas exatas se repetem muito: {{ i.coordenadas_repetidas_registros|br }} registros estão em {{ i.coordenadas_repetidas_pontos|br }} pontos, e parte deles pode indicar uma referência, e não o local do impacto.
+- **Gravidade:** `Com óbito`, `Com feridos graves`, `Com feridos leves`, `Sem feridos (ilesos registrados)` e `Sem informação de vítimas`.
+
+### 2.3 Ressalvas Metodológicas
+- **2015 a 2018:** só há sinistros fatais. Calcular letalidade com esses anos a infla.
+- **Notificações:** são {{ i.notificacoes|br }} registros, quase sempre sem dados de vítimas e veículos. Sua participação anual varia de {{ i.notificacoes_pct_min|br }}% a {{ i.notificacoes_pct_max|br }}% desde 2019, e parte pode repetir sinistros já registrados: há ao menos {{ i.grupos_mesma_data_hora_via|br }} grupos com mesma data, hora e via. A definição oficial do tipo de registro deve ser conferida no dicionário do Infosiga.
+- **Base comparável:** letalidade, gravidade por modal e modelo usam **sinistros de 2019 em diante, sem notificações**. Mesmo assim, os totais anuais não medem tendência, porque 2019 tem só {{ i.sinistros_primeiro_ano_comparavel|br }} sinistros fora das notificações.
+- **Exposição:** não há fluxo de veículos nem frota, então volume não equivale a risco.
+
+---
+
+## 3. Principais Descobertas
+
+### 3.1 Desfecho dos Registros
+| Desfecho | Registros | % |
+| :--- | :---: | :---: |
+| Sem informação de vítimas | {{ i.desfechos.sem_informacao.n|br }} | {{ i.desfechos.sem_informacao.pct|br(1) }}% |
+| Com feridos leves | {{ i.desfechos.leves.n|br }} | {{ i.desfechos.leves.pct|br(1) }}% |
+| Com feridos graves | {{ i.desfechos.graves.n|br }} | {{ i.desfechos.graves.pct|br(1) }}% |
+| Com óbito | {{ i.desfechos.obito.n|br }} | {{ i.desfechos.obito.pct|br(1) }}% |
+| Sem feridos (ilesos registrados) | {{ i.desfechos.sem_feridos.n|br }} | {{ i.desfechos.sem_feridos.pct|br(1) }}% |
+
+Os {{ i.desfechos.obito.n|br }} registros com óbito somam **{{ i.mortos|br }} vítimas fatais**. Os {{ i.desfechos.sem_informacao.n|br }} registros sem informação não permitem afirmar que ninguém se feriu.
+
+### 3.2 Letalidade por Tipo de Sinistro (base comparável)
+Letalidade = sinistros com óbito ÷ sinistros do tipo.
+
+| Tipo de Sinistro | Sinistros | Com óbito | Óbitos (pessoas) | Feridos graves (pessoas) | Letalidade |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+{% for linha in i.letalidade %}
+| **{{ linha.rotulo }}** | {{ linha.sinistros|br }} | {{ linha.sinistros_fatais|br }} | {{ linha.mortos|br }} | {{ linha.feridos_graves|br }} | **{{ linha.letalidade_pct|br(2) }}%** |
+{% endfor %}
+
+No conjunto, a letalidade do choque é **{{ i.razao_choque_colisao|br(2) }} vezes** a da colisão (IC95% {{ i.razao_ic_inf|br(2) }} a {{ i.razao_ic_sup|br(2) }}). Por tipo de via:
+
+| Via | Choque | Colisão |
+| :--- | :---: | :---: |
+| Vias urbanas | {{ i.choque_urbano.pct|br(2) }}% ({{ i.choque_urbano.fatais|br }}/{{ i.choque_urbano.n|br }}) | {{ i.colisao_urbana.pct|br(2) }}% ({{ i.colisao_urbana.fatais|br }}/{{ i.colisao_urbana.n|br }}) |
+| Estradas e rodovias | {{ i.choque_rodovia.pct|br(2) }}% ({{ i.choque_rodovia.fatais|br }}/{{ i.choque_rodovia.n|br }}) | {{ i.colisao_rodovia.pct|br(2) }}% ({{ i.colisao_rodovia.fatais|br }}/{{ i.colisao_rodovia.n|br }}) |
+
+{% if i.urbano_choque_maior and i.rodovia_taxas_proximas %}
+A diferença aparece nas vias urbanas; nas rodovias, as taxas são próximas.
+{% else %}
+A comparação depende do tipo de via e deve ser lida nas duas linhas da tabela.
+{% endif %}
+{% if i.atropelamento_choque_p >= 0.05 %}
+Atropelamento e choque não podem ser ordenados com segurança (teste exato de Fisher, p = {{ i.atropelamento_choque_p|br(3) }}).
+{% else %}
+Atropelamento e choque têm letalidades diferentes (teste exato de Fisher, p = {{ i.atropelamento_choque_p|br(3) }}).
+{% endif %}
+A base não informa a velocidade nem qual objeto foi atingido.
+
+### 3.3 Modais
+Entre os {{ i.registros_com_modal|br }} registros com veículo ou pedestre informado, automóveis aparecem em {{ i.modais.automovel|br(1) }}%, motocicletas em {{ i.modais.moto|br(1) }}%, caminhões em {{ i.modais.caminhao|br(1) }}%, pedestres em {{ i.modais.pedestre|br(1) }}%, bicicletas em {{ i.modais.bicicleta|br(1) }}% e ônibus em {{ i.modais.onibus|br(1) }}%.
+
+A proporção de sinistros graves ou fatais com e sem moto, na base comparável, é:
+
+| Via | Com moto | Sem moto |
+| :--- | :---: | :---: |
+| Vias urbanas | {{ i.moto_urbana_pct|br(1) }}% | {{ i.sem_moto_urbana_pct|br(1) }}% |
+| Estradas e rodovias | {{ i.moto_rodovia_pct|br(1) }}% | {{ i.sem_moto_rodovia_pct|br(1) }}% |
+
+A base não liga cada vítima ao seu veículo. Ela não permite concluir que o motociclista é a figura mais vulnerável nem que a moto é o principal fator de gravidade.
+
+### 3.4 Padrões Temporais
+- **Horas:** os maiores volumes ocorrem às {{ i.horas[0].hora }}h ({{ i.horas[0].n|br }}), {{ i.horas[1].hora }}h ({{ i.horas[1].n|br }}) e {{ i.horas[2].hora }}h ({{ i.horas[2].n|br }}), seguidos das {{ i.horas[3].hora }}h ({{ i.horas[3].n|br }}). Essas três primeiras horas concentram {{ i.horas_top3_pct_registros|br(1) }}% dos registros e {{ i.horas_top3_pct_fatais|br(1) }}% dos sinistros fatais.
+- **Dias úteis e fins de semana:** contando todos os dias do calendário desde 2019, inclusive os {{ i.teste.dias_sem_registro_pct|br(1) }}% sem registro, as médias são **{{ i.teste.media_uteis|br(2) }}** e **{{ i.teste.media_fds|br(2) }} registros/dia**. A diferença é de {{ i.teste.diferenca|br(2) }} (IC95% {{ i.teste.ic95[0]|br(2) }} a {{ i.teste.ic95[1]|br(2) }}; teste de Welch, p = {{ i.teste.p_welch|br(3) }}). {% if i.teste.significativo %}O intervalo exclui zero.{% else %}O resultado não demonstra diferença nem prova igualdade.{% endif %}
+
+- **Dias da semana:** {{ i.dias_destaque[0].nome }} ({{ i.dias_destaque[0].media|br(2) }}) e {{ i.dias_destaque[1].nome }} ({{ i.dias_destaque[1].media|br(2) }}) têm as maiores médias; os demais dias variam de {{ i.dias_demais_min|br(2) }} a {{ i.dias_demais_max|br(2) }}. Esse contraste é descritivo e deve ser confirmado em novos períodos.
+- **Madrugada:** {{ i.noite_fds_pct|br(1) }}% dos registros de fim de semana ocorrem entre 22h e 5h, contra {{ i.noite_uteis_pct|br(1) }}% nos dias úteis.
+
+As relações com saída de fábricas, retorno do almoço e álcool são hipóteses, pois não são medidas aqui.
+
+### 3.5 Geografia
+- **Vias urbanas:** têm **{{ i.via_urbana.mortos|br }} dos {{ i.mortos|br }} óbitos ({{ i.via_urbana.mortos_pct|br }}%)**, com letalidade de {{ i.via_urbana.letalidade|br(1) }}% na base completa.
+- **Estradas e rodovias:** têm **{{ i.via_rodovia.mortos|br }} óbitos ({{ i.via_rodovia.mortos_pct|br }}%)**, com letalidade de {{ i.via_rodovia.letalidade|br(1) }}%. SP-310 e SP-326 somam {{ i.mortos_sp310_sp326|br }} óbitos. Outros {{ i.mortos_sem_via|br }} óbitos estão sem tipo de via informado.
+- **Vias com mais sinistros, sem notificações:** {% for v in i.ranking_vias %}{{ v.via }} ({{ v.n|br }}){{ ", " if not loop.last else "." }}{% endfor %}
+
+
+{% if i.via_topo_muda %}
+Com notificações, {{ i.via_topo_com_notificacoes.via }} lideraria ({{ i.via_topo_com_notificacoes.n|br }}), mas {{ i.via_topo_com_notificacoes.pct_notificacoes|br }}% dos registros são notificações. {% if i.via_topo_com_notificacoes.via == "RUA SINHARINHA FROTA" %}O endereço do hospital fica nessa rua, o que indica possível registro do local de atendimento, ainda sem confirmação. {% endif %}Por isso, ela não deve ser tratada como a via mais crítica. {% endif %}Este estudo não analisa trevos específicos.
+
+### 3.6 Modelo de Machine Learning
+Um Random Forest treinado na base comparável obteve **{{ i.modelo.acuracia|br(1) }}% de acurácia**, contra {{ i.modelo.referencia|br(1) }}% de sempre prever a classe mais comum, e {{ i.modelo.balanceada|br(1) }}% de acurácia balanceada.
+
+{% if i.modelo.supera_referencia %}
+O modelo supera essa referência, mas continua exploratório.
+{% else %}
+**O modelo não supera a referência, portanto as variáveis disponíveis não sustentam previsão de gravidade.**
+{% endif %}
+As maiores importâncias de permutação são {% for v in i.modelo.principais %}{{ v.variavel }} ({{ v.valor|br(3) }}){{ ", " if not loop.last else "." }}{% endfor %} Elas não indicam sentido nem causa, e o modelo usa dados conhecidos só depois do sinistro.
+
+---
+
+## 4. Recomendações
+
+As ações abaixo são hipóteses a validar com contagem de tráfego, inspeção em campo e dados de velocidade e alcoolemia.
+
+### A. Engenharia de Tráfego
+- **Choques urbanos:** inspecionar os locais de choque em vias urbanas e identificar os objetos atingidos antes de instalar defensas.
+- **Rodovias:** avaliar com a concessionária ou o órgão responsável os pontos de óbito na SP-310 e na SP-326.
+- **Motocicletas:** avaliar bolsões de parada nos cruzamentos de maior fluxo.
+
+### B. Fiscalização e Monitoramento
+- **Velocidade:** medir a velocidade nas vias com mais óbitos antes de definir locais e horários de radares.
+- **Dias com mais registros:** testar operações noturnas em {{ i.dias_destaque[0].nome }} e {{ i.dias_destaque[1].nome }}, medindo o resultado.
+- **Qualidade do dado:** conferir com o Infosiga as notificações e as coordenadas repetidas.
+
+### C. Educação e Conscientização
+- **Empresas e trabalhadores:** promover campanhas de direção defensiva e uso correto de equipamentos de proteção.
+
+---
+
+## 5. Limitações do Estudo
+- **Subnotificação:** sinistros leves resolvidos sem acionar os órgãos públicos não constam na base.
+- **Notificações:** faltam dados de vítimas e veículos, e pode haver duplicidade.
+- **Vítima sem veículo:** a base não indica em qual veículo cada vítima estava.
+- **Falta de exposição:** não há fluxo de veículos nem frota.
+- **Falta de variáveis comportamentais:** não há velocidade, consumo de álcool ou manutenção veicular.
+- **Localização:** coordenadas e nomes de vias têm repetições e grafias diferentes.
+- **Dados recentes:** o último ano é parcial e está sujeito a revisões.
+
+---
+
+## 6. Anexos e Arquivos Gerados
+- **Base Limpa Consolidada:** `data/matao_limpo.csv`
+- **Resumo Anual Estatístico:** `output/relatorios/resumo_anual_matao.csv`
+- **Mapa Interativo, Gráficos e Resumo em PDF:** branch `artefatos`, que guarda apenas a versão mais recente

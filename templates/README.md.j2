@@ -1,0 +1,138 @@
+<!-- Gerado por scripts/gerar_artefatos.py. Para mudar o texto, edite templates/README.md.j2. -->
+# 🚦 Análise e Diagnóstico de Acidentes de Trânsito em Matão/SP ({{ i.ano_inicio }}–{{ i.ano_fim }})
+
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Pandas](https://img.shields.io/badge/pandas-2.0%2B-150458.svg)](https://pandas.pydata.org/)
+[![Scikit-Learn](https://img.shields.io/badge/scikit--learn-1.4%2B-orange.svg)](https://scikit-learn.org/)
+[![Plotly](https://img.shields.io/badge/plotly-5.20%2B-3F4F75.svg)](https://plotly.com/)
+
+Estudo de Ciência de Dados sobre os sinistros de trânsito registrados em **Matão/SP** desde março de 2015, com ingestão de dados estaduais, análise estatística, dashboard e mapa interativo.
+
+> **Atualização automática:** este README, o relatório, a apresentação, o resumo em PDF, os gráficos e os mapas são gerados de novo quando chegam dados mensais. Gráficos, mapas, resumo em PDF e notebooks executados ficam na branch [`artefatos`](https://github.com/douglasagalbiatti/projeto-transito-matao/tree/artefatos), que guarda apenas a versão mais recente. O `Relatorio_Sinistros_Transito_Matao_2015-2026-1.pdf` e os arquivos de `publicacao_a_comarca/` são registros históricos e mantêm os textos anteriores; veja a [errata](output/relatorios/ERRATA.md).
+
+---
+
+## 📌 Sumário Executivo
+
+Números do recorte até {{ i.data_fim }}:
+
+- **Fonte de Dados:** Infosiga SP.
+- **Volume:** **{{ i.total|br }} registros** (`cod_ibge == 3529302`), dos quais {{ i.notificacoes|br }} são notificações, quase sempre sem dados de vítimas e veículos.
+- **Base comparável:** letalidade, gravidade por modal e modelo usam sinistros de 2019 em diante, sem notificações.
+- **Óbitos:** **{{ i.mortos|br }} vítimas** em {{ i.desfechos.obito.n|br }} sinistros; {{ i.via_urbana.mortos_pct|br }}% nas vias urbanas e {{ i.via_rodovia.mortos_pct|br }}% nas estradas e rodovias, com letalidade por registro de {{ i.via_urbana.letalidade|br(1) }}% e {{ i.via_rodovia.letalidade|br(1) }}%.
+- **Choque e colisão:** a letalidade do choque é {{ i.razao_choque_colisao|br(2) }} vezes a da colisão (IC95% {{ i.razao_ic_inf|br(2) }} a {{ i.razao_ic_sup|br(2) }}){% if i.urbano_choque_maior and i.rodovia_taxas_proximas %}, diferença que ocorre nas vias urbanas e não nas rodovias{% endif %}.
+- **Dias:** {{ i.teste.media_uteis|br(2) }} registros/dia nos dias úteis e {{ i.teste.media_fds|br(2) }} nos fins de semana (p = {{ i.teste.p_welch|br(3) }}), com {{ i.dias_destaque[0].nome }} e {{ i.dias_destaque[1].nome }} nas maiores médias.
+- **Modelo:** o Random Forest obteve {{ i.modelo.acuracia|br(1) }}% de acurácia, contra {{ i.modelo.referencia|br(1) }}% de sempre prever a classe mais comum.
+
+---
+
+## 📂 Estrutura do Projeto
+
+```text
+projeto-transito-matao/
+│
+├── app.py                             # Dashboard Streamlit
+├── data/
+│   └── matao_limpo.csv                # Dataset tratado consolidado
+├── notebooks/
+│   ├── 01-exploracao.ipynb            # Leitura diagnóstica e auditoria de nulos
+│   ├── 02-limpeza.ipynb               # Unificação, tipos e feature engineering
+│   ├── 03-analise-matao.ipynb         # Análise temporal, modais, teste e modelo
+│   └── 04-visualizacoes.ipynb         # Mapas e ranking de vias
+├── output/
+│   ├── graficos/                      # Figuras e mapa HTML (na branch artefatos)
+│   ├── notebooks/                     # Notebooks executados (na branch artefatos)
+│   └── relatorios/                    # Relatório, errata e resumo anual
+├── scripts/
+│   ├── atualizar_dados_infosiga.py    # ETL mensal
+│   ├── gerar_artefatos.py             # Gera gráficos e documentos
+│   └── publicar_artefatos.sh          # Substitui a branch artefatos
+├── src/
+│   ├── indicadores.py                 # Números usados nos documentos
+│   ├── metricas.py                    # Regras estatísticas compartilhadas
+│   └── modelo.py                      # Modelo exploratório
+├── templates/                         # Modelos do README e dos documentos
+├── tests/
+├── requirements.txt
+└── requirements-artefatos.txt         # Dependências da geração de artefatos
+```
+
+---
+
+## 📊 Principais Resultados
+
+### 1. Evolução Anual
+Até 2018, a base traz apenas sinistros fatais. A partir de 2019, a participação das notificações varia de {{ i.notificacoes_pct_min|br }}% a {{ i.notificacoes_pct_max|br }}%, então o total anual não mede tendência. Os sinistros com óbito variam de {{ i.fatais_ano_min }} a {{ i.fatais_ano_max }} por ano, e as vítimas fatais, de {{ i.mortos_ano_min }} a {{ i.mortos_ano_max }}.
+
+![Acidentes por Ano]({{ url }}/output/graficos/acidentes_por_ano.png)
+
+### 2. Horários e Dias da Semana
+Os maiores volumes ocorrem às {{ i.horas_top3_texto }}, sem dado de fluxo de veículos que permita medir risco. {% if i.teste.significativo %}O teste de Welch, com todos os dias do calendário, indica diferença entre dias úteis e fins de semana.{% else %}O teste de Welch com todos os dias do calendário não demonstra diferença entre dias úteis e fins de semana, o que não prova igualdade.{% endif %}
+
+
+![Acidentes por Dia e Hora]({{ url }}/output/graficos/acidentes_dia_e_hora.png)
+
+### 3. Letalidade por Tipo de Sinistro (base comparável)
+
+![Tipos e Veículos]({{ url }}/output/graficos/tipos_e_veiculos.png)
+
+| Tipo de Sinistro | Sinistros | Com óbito | Óbitos (pessoas) | Feridos graves (pessoas) | Letalidade |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+{% for linha in i.letalidade %}
+| **{{ linha.rotulo }}** | {{ linha.sinistros|br }} | {{ linha.sinistros_fatais|br }} | {{ linha.mortos|br }} | {{ linha.feridos_graves|br }} | **{{ linha.letalidade_pct|br(2) }}%** |
+{% endfor %}
+
+### 4. Dia da Semana e Hora do Dia
+
+![Mapa de Calor Dia e Hora]({{ url }}/output/graficos/heatmap_dia_hora.png)
+
+### 5. Modelo Random Forest
+{% if i.modelo.supera_referencia %}
+O modelo supera a referência de sempre prever a classe mais comum, mas continua exploratório. A importância de permutação não indica sentido nem causa.
+{% else %}
+O modelo não supera a referência de sempre prever a classe mais comum, portanto não sustenta previsão de gravidade. A importância de permutação não indica sentido nem causa.
+{% endif %}
+
+![Importância das Features]({{ url }}/output/graficos/importancia_features_ml.png)
+
+### 6. Mapas
+O [mapa interativo](https://github.com/douglasagalbiatti/projeto-transito-matao/blob/artefatos/output/graficos/mapa_acidentes.html) (baixe o HTML para abrir) e o mapa estático mostram {{ i.pontos_no_mapa|br }} registros, sem notificações, que se concentram em poucas coordenadas repetidas. Parte dos pontos restantes também pode indicar uma referência, e não o local do impacto.
+
+---
+
+## 🛠️ Como Reproduzir
+
+```bash
+git clone https://github.com/douglasagalbiatti/projeto-transito-matao.git
+cd projeto-transito-matao
+
+python -m venv .venv
+source .venv/bin/activate  # No Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+Os notebooks 03 e 04 rodam com a base versionada. Os notebooks 01 e 02 exigem os arquivos estaduais `data/sinistros_2015-2021.csv`, `data/sinistros_2022-2024.csv` e `data/sinistros_2025-2026.csv`, que não são versionados.
+
+Para rodar o dashboard e os testes:
+
+```bash
+streamlit run app.py
+```
+
+```bash
+python -m unittest discover -s tests -t .
+```
+
+Para gerar novamente gráficos e documentos:
+
+```bash
+pip install -r requirements-artefatos.txt
+python scripts/gerar_artefatos.py
+```
+
+Altere textos em `templates/`, pois os documentos gerados são sobrescritos a cada atualização.
+
+---
+
+## 📄 Relatório Técnico
+👉 [`output/relatorios/relatorio_final_matao.md`](output/relatorios/relatorio_final_matao.md)

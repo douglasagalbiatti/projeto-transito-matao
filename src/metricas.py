@@ -1,9 +1,12 @@
 """Regras estatísticas compartilhadas por ETL, notebooks e dashboard."""
 
+import os
+
 import numpy as np
 import pandas as pd
 
 ANO_INICIO_COMPARAVEL = 2019
+URL_ARTEFATOS = "https://raw.githubusercontent.com/douglasagalbiatti/projeto-transito-matao/artefatos"
 SEM_FERIDOS = "Sem feridos (ilesos registrados)"
 SEM_INFORMACAO = "Sem informação de vítimas"
 ORDEM_GRAVIDADE = [
@@ -13,6 +16,12 @@ ORDEM_GRAVIDADE = [
     SEM_FERIDOS,
     SEM_INFORMACAO,
 ]
+
+
+def caminho_grafico(nome: str) -> str:
+    """Usa o gráfico gerado localmente ou, se não houver, o publicado na branch 'artefatos'."""
+    caminho = f"output/graficos/{nome}"
+    return caminho if os.path.exists(caminho) else f"{URL_ARTEFATOS}/{caminho}"
 
 
 def br(valor, casas: int = 0) -> str:

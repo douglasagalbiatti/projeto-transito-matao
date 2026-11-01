@@ -68,18 +68,42 @@ jobs:
         run: |
           python scripts/atualizar_dados_infosiga.py --automatico
 
-      - name: 7. Commitar e Enviar Novos Dados ao Repositório
+      - name: 7. Verificar Alterações nos Dados
         if: steps.checar_data.outputs.deve_executar == 'true'
+        id: checar_dados
         shell: bash
         run: |
           if git diff --quiet data/matao_limpo.csv output/relatorios/resumo_anual_matao.csv; then
             echo "✅ Nenhuma alteração encontrada nos dados. Base já estava 100% sincronizada."
+            echo "houve_mudanca=false" >> "$GITHUB_OUTPUT"
           else
-            echo "🚀 Novos dados detectados! Gravando commit no repositório..."
-            git config --global user.name "github-actions[bot]"
-            git config --global user.email "github-actions[bot]@users.noreply.github.com"
-            git add data/matao_limpo.csv output/relatorios/resumo_anual_matao.csv
-            git commit -m "chore(data): atualização automática dos dados do InfoSiga [skip ci]"
-            git push
-            echo "🎉 Novos dados publicados no repositório com sucesso!"
+            echo "houve_mudanca=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: 8. Instalar Dependências dos Artefatos
+        if: steps.checar_dados.outputs.houve_mudanca == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0
+          pip install -r requirements.txt -r requirements-artefatos.txt
+
+      - name: 9. Gerar Gráficos e Documentos
+        if: steps.checar_dados.outputs.houve_mudanca == 'true'
+        run: |
+          python scripts/gerar_artefatos.py
+
+      - name: 10. Publicar Arquivos Gerados na Branch de Artefatos
+        if: steps.checar_dados.outputs.houve_mudanca == 'true'
+        shell: bash
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          bash scripts/publicar_artefatos.sh
+
+      - name: 11. Commitar e Enviar ao Repositório
+        if: steps.checar_dados.outputs.houve_mudanca == 'true'
+        shell: bash
+        run: |
+          git add data/matao_limpo.csv output/relatorios README.md apresentacao_matao.html
+          git commit -m "chore(data): atualização automática de dados e documentos [skip ci]"
+          git push
