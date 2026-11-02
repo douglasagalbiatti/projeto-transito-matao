@@ -8,7 +8,7 @@
 
 Estudo de Ciência de Dados sobre os sinistros de trânsito registrados em **Matão/SP** desde março de 2015, com ingestão de dados estaduais, análise estatística, dashboard e mapa interativo.
 
-> **Atualização automática:** este README, o relatório, a apresentação, o resumo em PDF, os gráficos e os mapas são gerados de novo quando chegam dados mensais. Gráficos, mapas, resumo em PDF e notebooks executados ficam na branch [`artefatos`](https://github.com/douglasagalbiatti/projeto-transito-matao/tree/artefatos), que guarda apenas a versão mais recente. O `Relatorio_Sinistros_Transito_Matao_2015-2026-1.pdf` e os arquivos de `publicacao_a_comarca/` são registros históricos e mantêm os textos anteriores; veja a [errata](output/relatorios/ERRATA.md).
+> **Atualização automática:** este README, o relatório, a apresentação, o resumo em PDF, os gráficos e os mapas são gerados de novo quando chegam dados mensais. Gráficos, mapas, resumo em PDF e notebooks executados ficam na branch [`artefatos`](https://github.com/douglasagalbiatti/projeto-transito-matao/tree/artefatos), que guarda apenas a versão mais recente. O `Relatorio_Sinistros_Transito_Matao_2015-2026-1.pdf` é um registro histórico e mantém os textos anteriores; veja a [errata](output/relatorios/ERRATA.md).
 
 ---
 
