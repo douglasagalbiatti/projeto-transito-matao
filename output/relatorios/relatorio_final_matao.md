@@ -6,7 +6,7 @@
 **Abrangência:** Município de Matão / SP (Código IBGE: 3529302)  
 **Recorte:** 18/03/2015 a 29/09/2026  
 
-> **Atualização automática:** números e conclusões condicionais são recalculados a cada novo mês de dados. A interpretação continua exigindo revisão humana. O relatório em PDF de setembro de 2026 e a matéria publicada mantêm os textos anteriores; veja `output/relatorios/ERRATA.md`.
+> **Atualização automática:** números e conclusões condicionais são recalculados a cada novo mês de dados. A interpretação continua exigindo revisão humana. As correções feitas sobre o estudo de setembro de 2026 estão em `output/relatorios/ERRATA.md`.
 
 ---
 

@@ -1,6 +1,6 @@
 # Errata do estudo de setembro de 2026
 
-Vale para `Relatorio_Sinistros_Transito_Matao_2015-2026-1.pdf`, mantido como registro histórico, e para a matéria publicada. Os valores corrigidos usam o recorte até 29/09/2026.
+Os valores corrigidos usam o recorte até 29/09/2026.
 
 | Afirmação original | Correção |
 | :--- | :--- |
