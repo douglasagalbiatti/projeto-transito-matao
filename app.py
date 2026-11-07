@@ -765,7 +765,41 @@ with tab6:
             st.warning("O modelo não supera a referência de sempre prever a classe mais comum.")
     else:
         clf, importancias, features_list = None, None, []
-    
+
+    with st.container(border=True):
+        st.markdown("#### ⚠️ Limitações do Modelo")
+        gravidade_comparavel = base_comparavel(df_completo)["gravidade"]
+        pct_graves = gravidade_comparavel.isin(["Com feridos graves", "Com óbito"]).mean() * 100
+        if resultado_ml is not None:
+            n_classes = len(clf.classes_)
+            desempenho = (
+                f"A acurácia de {br(resultado_ml['acuracia'] * 100, 1)}% equivale à de sempre prever a classe mais comum, "
+                f"e a acurácia balanceada de {br(resultado_ml['acuracia_balanceada'] * 100, 1)}% fica perto dos "
+                f"{br(100 / n_classes, 1)}% de um palpite ao acaso entre as {n_classes} classes. Na prática, o modelo "
+                "aponta quase sempre a classe mais comum, e o simulador tende a repetir essa classe em qualquer cenário."
+                if resultado_ml['acuracia_balanceada'] <= 1 / n_classes + 0.05
+                else f"A acurácia de {br(resultado_ml['acuracia'] * 100, 1)}% deve ser comparada com a referência de "
+                f"{br(resultado_ml['referencia'] * 100, 1)}% de sempre prever a classe mais comum."
+            )
+            validacao = (
+                f"Uma única divisão aleatória dos sinistros de 2019 em diante, com {br(resultado_ml['n_teste'])} casos "
+                "de teste, sem validação por período nem intervalo de confiança. Outro sorteio pode mudar as métricas, "
+                "e não há garantia de que o padrão se mantenha nos próximos anos."
+            )
+        else:
+            desempenho = "Não há sinistros suficientes na base comparável para treinar e avaliar o modelo."
+            validacao = "Sem conjunto de teste, não há avaliação do modelo."
+        st.markdown(f"""
+- **Não prevê acidentes:** usa o tipo de sinistro e os veículos envolvidos, informações conhecidas só depois que o sinistro aconteceu. Ele descreve associações com a gravidade, não a chance de um acidente ocorrer.
+- **Desempenho:** {desempenho}
+- **Classes raras:** feridos graves e óbitos são {br(pct_graves, 1)}% da base comparável. O modelo foi treinado sem peso extra para essas classes, raramente as aponta, e as estimativas em % não foram calibradas, então não devem ser lidas como probabilidades reais.
+- **Validação:** {validacao}
+- **Variáveis ausentes:** a base não traz velocidade, alcoolemia, uso de capacete ou cinto, idade dos envolvidos nem condição da via. Também não liga cada vítima ao seu veículo, e contagens vazias viram zero.
+- **Importância não é causa:** a importância de permutação mostra quanto o modelo usa cada variável, não o sentido do efeito. Variáveis correlacionadas dividem a importância entre si.
+- **Simulador:** fixa o mês em junho e as bicicletas em zero. Combinações raras ou ausentes na base, como vários caminhões e pedestres no mesmo sinistro, são extrapolação.
+- **Uso adequado:** apoio à exploração dos dados. Não serve para decidir sobre casos individuais nem substitui a análise de campo.
+""")
+
     col_ml1, col_ml2 = st.columns([1, 1])
     
     with col_ml1:
