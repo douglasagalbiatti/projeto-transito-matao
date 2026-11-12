@@ -9,7 +9,7 @@ Antes de tocar nos dados, defina claramente o que deseja responder. Exemplos de 
 - Quais são as vias ou regiões mais críticas?
 - Qual a gravidade dos acidentes (com/sem vítimas, óbitos)?
 - Houve alguma tendência ao longo dos anos?
-- É possível prever a gravidade de um acidente com base nas condições?
+- Quais condições se associam a acidentes com feridos graves ou óbitos?
 
 > **Dica:** Escolha 3 a 5 perguntas principais. Isso manterá seu projeto focado e evitará que você se perca no volume de dados.
 
@@ -181,8 +181,11 @@ def classificar_gravidade(row):
         return 'Com feridos graves'
     elif row['feridos_leves'] > 0:
         return 'Com feridos leves'
+    elif row['ilesos'] > 0:
+        return 'Sem feridos (ilesos registrados)'
     else:
-        return 'Sem vítimas'
+        # Nenhuma vítima nem ileso registrado: não se sabe o desfecho
+        return 'Sem informação de vítimas'
 
 df_matao['gravidade'] = df_matao.apply(classificar_gravidade, axis=1)
 ```
@@ -312,7 +315,7 @@ fig.show()
 
 ---
 
-## 7. Análise Estatística e Modelagem Preditiva (Opcional)
+## 7. Análise Estatística e Modelo de Gravidade (Opcional)
 
 ### 7.1 Teste de hipóteses simples
 
@@ -335,39 +338,59 @@ else:
     print("Não há evidência estatística de diferença significativa.")
 ```
 
-### 7.2 Modelo preditivo simples: prever gravidade do acidente
+### 7.2 Modelo exploratório: regressão logística da gravidade
+
+Em vez de tentar adivinhar cada classe de gravidade, o projeto faz uma pergunta mais simples: **o sinistro teve ferido grave ou óbito?** A regressão logística responde com uma probabilidade e, mais importante, com uma **razão de chance** para cada condição, fácil de interpretar.
 
 ```python
+import numpy as np
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import average_precision_score, roc_auc_score
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report, confusion_matrix
 
-# Prepare os dados para modelagem
-features = ['hora_int', 'dia_semana', 'tipo', 'mes']
+# 1. Desfecho binário: 1 = ferido grave ou óbito, 0 = demais casos.
+#    Sinistros sem informação de vítimas ficam de fora: não se sabe se foram graves,
+#    e contá-los como "não grave" subestimaria os casos graves.
+df_model = df_matao[df_matao['gravidade'] != 'Sem informação de vítimas'].dropna(subset=['hora_int', 'tipo']).copy()
+df_model['grave_ou_fatal'] = df_model['gravidade'].isin(['Com óbito', 'Com feridos graves']).astype(int)
 
-# Transforme variáveis categóricas em numéricas (One-Hot Encoding)
-df_model = df_matao[features + ['gravidade']].dropna().copy()
-df_model = pd.get_dummies(df_model, columns=['dia_semana', 'tipo', 'mes'], drop_first=True)
+# 2. Variáveis explicativas: turno do dia, fim de semana e tipo de sinistro
+df_model['turno'] = pd.cut(df_model['hora_int'], bins=[-1, 5, 11, 17, 23],
+                           labels=['MADRUGADA', 'MANHA', 'TARDE', 'NOITE']).astype(str)
+X = pd.get_dummies(df_model[['turno', 'tipo']], prefix=['turno', 'tipo'])
 
-X = df_model.drop('gravidade', axis=1)
-y = df_model['gravidade']
+# Remova a categoria mais comum de cada variável: ela vira a referência das comparações
+for coluna in ['turno', 'tipo']:
+    mais_comum = df_model[coluna].mode().iloc[0]
+    X = X.drop(columns=f'{coluna}_{mais_comum}')
+X['fim_de_semana'] = df_model['fim_de_semana']
+X = X.astype(float)
+y = df_model['grave_ou_fatal']
 
+# 3. Avaliação em dados que o modelo não viu
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42, stratify=y)
-
-# Treine um modelo
-clf = RandomForestClassifier(n_estimators=100, random_state=42)
+clf = LogisticRegression(C=np.inf, max_iter=5000)  # C infinito = sem regularização
 clf.fit(X_train, y_train)
+prob = clf.predict_proba(X_test)[:, 1]
 
-y_pred = clf.predict(X_test)
+print(f"Proporção de casos graves: {y.mean():.1%}")
+print(f"ROC-AUC: {roc_auc_score(y_test, prob):.3f}  (0,5 = acaso; 1,0 = perfeito)")
+print(f"PR-AUC:  {average_precision_score(y_test, prob):.3f}  (compare com a proporção de casos graves)")
 
-print(classification_report(y_test, y_pred))
-
-# Importância das variáveis
-importancias = pd.Series(clf.feature_importances_, index=X.columns).sort_values(ascending=False)
-print(importancias.head(10))
+# 4. Razões de chance, com o modelo ajustado em todos os dados
+clf.fit(X, y)
+razoes = pd.Series(np.exp(clf.coef_[0]), index=X.columns).sort_values(ascending=False)
+print(razoes.round(2))
 ```
 
-> **Atenção:** Modelos preditivos com poucos dados de uma única cidade podem não ser robustos. Use mais como exercício de aprendizado do que como ferramenta definitiva.
+**Como ler os resultados:**
+
+- **Razão de chance (RC):** RC = 2 significa que, com aquela condição, a chance de o sinistro ser grave é o dobro da categoria de referência; RC = 0,5 significa metade. Valores perto de 1 indicam pouca diferença.
+- **ROC-AUC e PR-AUC em vez de acurácia:** como os casos graves são minoria, um modelo que sempre diz "não grave" já teria acurácia alta sem servir para nada. O ROC-AUC mede se o modelo ordena bem os casos graves acima dos demais; o PR-AUC mostra o quanto ele supera a simples proporção de casos graves.
+
+> **Para ir além:** o módulo `src/modelo.py` do projeto usa os veículos envolvidos (moto, automóvel, pedestre, bicicleta, caminhão ou ônibus) e o tipo de via como variáveis, calcula intervalos de confiança de 95% para as razões de chance e valida o modelo de duas formas: validação cruzada repetida e validação por ano (treina com os anos anteriores e testa no ano seguinte).
+
+> **Atenção:** as limitações vêm dos dados, não do modelo. A base do Infosiga não traz fatores decisivos para a gravidade, como velocidade, alcoolemia, uso de capacete ou cinto e idade dos envolvidos. Por isso, use o modelo para entender quais condições se associam a sinistros graves, não para prever a gravidade de um caso específico.
 
 ---
 
@@ -416,7 +439,7 @@ Use esta lista para acompanhar seu avanço:
 - [ ] Análise de tipos e gravidade concluída
 - [ ] Mapa de calor gerado (se houver coordenadas)
 - [ ] Cruzamentos de variáveis analisados
-- [ ] (Opcional) Modelagem preditiva testada
+- [ ] (Opcional) Modelo de regressão logística ajustado e razões de chance interpretadas
 - [ ] Relatório escrito com storytelling
 - [ ] Gráficos e resumos exportados para `output/`
 
