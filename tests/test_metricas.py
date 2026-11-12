@@ -21,6 +21,13 @@ class TestMetricas(unittest.TestCase):
         self.assertEqual(metricas.classificar_gravidade(_registros(ilesos=[2]))[0], metricas.SEM_FERIDOS)
         self.assertEqual(metricas.classificar_gravidade(_registros(mortos=[1], ilesos=[2]))[0], "Com óbito")
 
+    def test_grave_ou_fatal_ignora_sinistros_sem_informacao(self):
+        from src.indicadores import _grave_ou_fatal_pct
+        df = _registros(mortos=[0, 0, 0, 0], feridos_graves=[1, 0, 0, 0], feridos_leves=[0, 1, 1, 0], ilesos=[0, 0, 0, 0])
+        df["gravidade"] = metricas.classificar_gravidade(df)
+        # O 4º sinistro não tem dados de vítimas e não conta como "não grave"
+        self.assertAlmostEqual(_grave_ou_fatal_pct(df), 100 / 3)
+
     def test_base_comparavel_exclui_anos_antigos_e_notificacoes(self):
         df = pd.DataFrame({
             "ano": [2018, 2019, 2019],

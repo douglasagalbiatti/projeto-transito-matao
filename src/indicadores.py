@@ -35,6 +35,8 @@ def _taxa(df: pd.DataFrame) -> dict:
 
 
 def _grave_ou_fatal_pct(df: pd.DataFrame) -> float:
+    """% de sinistros com ferido grave ou óbito, só entre os com vítimas informadas (sem dados, o desfecho é desconhecido)."""
+    df = df[df["gravidade"] != SEM_INFORMACAO]
     return ((df["mortos"] > 0) | (df["feridos_graves"] > 0)).mean() * 100 if len(df) else 0.0
 
 

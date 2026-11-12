@@ -78,12 +78,12 @@ A base não informa a velocidade nem qual objeto foi atingido.
 ### 3.3 Modais
 Entre os 2.223 registros com veículo ou pedestre informado, automóveis aparecem em 67,1%, motocicletas em 62,2%, caminhões em 9,4%, pedestres em 5,0%, bicicletas em 4,0% e ônibus em 1,5%.
 
-A proporção de sinistros graves ou fatais com e sem moto, na base comparável, é:
+A proporção de sinistros graves ou fatais com e sem moto, entre os sinistros da base comparável com vítimas informadas, é:
 
 | Via | Com moto | Sem moto |
 | :--- | :---: | :---: |
-| Vias urbanas | 16,9% | 12,3% |
-| Estradas e rodovias | 29,8% | 29,6% |
+| Vias urbanas | 16,9% | 12,5% |
+| Estradas e rodovias | 29,8% | 30,6% |
 
 A base não liga cada vítima ao seu veículo. Ela não permite concluir que o motociclista é a figura mais vulnerável nem que a moto é o principal fator de gravidade.
 
