@@ -73,11 +73,15 @@ jobs:
         id: checar_dados
         shell: bash
         run: |
-          if git diff --quiet data/matao_limpo.csv output/relatorios/resumo_anual_matao.csv; then
+          # Disparo manual sempre regenera gráficos e documentos, para refletir mudanças no código mesmo sem dados novos
+          if ! git diff --quiet data/matao_limpo.csv output/relatorios/resumo_anual_matao.csv; then
+            echo "houve_mudanca=true" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "✅ Sem dados novos, mas o disparo manual regenera gráficos e documentos."
+            echo "houve_mudanca=true" >> "$GITHUB_OUTPUT"
+          else
             echo "✅ Nenhuma alteração encontrada nos dados. Base já estava 100% sincronizada."
             echo "houve_mudanca=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "houve_mudanca=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: 8. Instalar Dependências dos Artefatos
@@ -105,5 +109,9 @@ jobs:
         shell: bash
         run: |
           git add data/matao_limpo.csv output/relatorios README.md apresentacao_matao.html
-          git commit -m "chore(data): atualização automática de dados e documentos [skip ci]"
-          git push
+          if git diff --staged --quiet; then
+            echo "Nenhuma alteração para commitar."
+          else
+            git commit -m "chore(data): atualização automática de dados e documentos [skip ci]"
+            git push
+          fi
