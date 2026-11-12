@@ -18,7 +18,7 @@ O estudo buscou descrever:
 - A evolução temporal e a distribuição por dia e hora;
 - Os tipos de sinistro e os modais envolvidos;
 - A distribuição dos óbitos entre vias urbanas e rodovias;
-- O que um modelo de Machine Learning consegue extrair das variáveis disponíveis.
+- O que um modelo de regressão logística consegue extrair das variáveis disponíveis.
 
 ---
 
@@ -102,11 +102,24 @@ As relações com saída de fábricas, retorno do almoço e álcool são hipóte
 
 Com notificações, RUA SINHARINHA FROTA lideraria (473), mas 77% dos registros são notificações. O endereço do hospital fica nessa rua, o que indica possível registro do local de atendimento, ainda sem confirmação. Por isso, ela não deve ser tratada como a via mais crítica. Este estudo não analisa trevos específicos.
 
-### 3.6 Modelo de Machine Learning
-Um Random Forest treinado na base comparável obteve **78,8% de acurácia**, contra 78,8% de sempre prever a classe mais comum, e 20,0% de acurácia balanceada.
+### 3.6 Modelo de Regressão Logística
+Uma regressão logística ajustada nos 2.141 sinistros da base comparável com desfecho informado estima se houve ferido grave ou óbito (17,4% dos casos).
 
-**O modelo não supera a referência, portanto as variáveis disponíveis não sustentam previsão de gravidade.**
-As maiores importâncias de permutação são motocicletas (0,019), via: VIAS URBANAS (0,015), automóveis (0,013). Elas não indicam sentido nem causa, e o modelo usa dados conhecidos só depois do sinistro.
+- **ROC-AUC:** 0,684 (IC 95%: 0,627 a 0,736); 0,5 equivale ao acaso.
+- **PR-AUC:** 0,358, contra 0,174 do acaso.
+- **Com limiar no risco médio:** sensibilidade de 60,7% e precisão de 32,5%.
+- **Acurácia (limiar de 50%):** 83,0%, contra 82,6% de sempre prever a classe mais comum, e 51,7% de acurácia balanceada.
+- **Validação cruzada (15 rodadas):** ROC-AUC de 0,663 ± 0,038.
+- **Validação por ano:** treinado só com anos anteriores, ROC-AUC de 0,599 em 2022, 0,678 em 2023, 0,725 em 2024, 0,669 em 2025, 0,676 em 2026 (2026 até 09/2026).
+
+**O modelo não supera a referência com o limiar de 50%, portanto as variáveis disponíveis não sustentam previsão de gravidade de casos individuais.**
+
+Razões de chance com intervalo de 95%, mantendo as demais variáveis iguais (referência: via urbana, colisão e tarde):
+
+- **Aumentam a chance de desfecho grave ou fatal:** bicicleta envolvida: 3,07 (IC 95%: 1,76 a 5,36); caminhão ou ônibus envolvido: 2,65 (IC 95%: 1,75 a 4,00); rodovia: 2,50 (IC 95%: 1,77 a 3,53); motocicleta envolvida: 2,46 (IC 95%: 1,72 a 3,51); tipo: choque: 2,09 (IC 95%: 1,44 a 3,05); madrugada (0h–6h): 1,88 (IC 95%: 1,21 a 2,90); noite (18h–24h): 1,41 (IC 95%: 1,05 a 1,88).
+- **Reduzem a chance:** tipo: não informado: 0,34 (IC 95%: 0,13 a 0,88).
+
+As limitações vêm dos dados, não do modelo: a base não traz velocidade, alcoolemia, uso de capacete ou cinto nem idade dos envolvidos. As razões de chance são associações, não causas, e o modelo usa dados conhecidos só depois do sinistro.
 
 ---
 

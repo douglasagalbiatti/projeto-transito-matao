@@ -3,10 +3,11 @@
 import unittest
 from unittest.mock import patch
 
+import numpy as np
 import pandas as pd
 
 from scripts import atualizar_dados_infosiga as etl
-from src import metricas
+from src import metricas, modelo
 
 
 def _registros(**colunas):
@@ -70,6 +71,61 @@ def _bruto(**extras):
     })
     linha.update(extras)
     return pd.DataFrame(linha)
+
+
+
+def _sinistros_modelo(n_por_ano=80, anos=range(2019, 2025)):
+    linhas = []
+    for ano in anos:
+        for i in range(n_por_ano):
+            grave = i % 5 == 0
+            linhas.append({
+                "ano": ano, "tipo_registro": "SINISTRO NAO FATAL",
+                "gravidade": "Com feridos graves" if grave else "Com feridos leves",
+                "qtd_motocicleta": int(i % 3 == 0 or grave), "qtd_automovel": int(i % 2 == 0),
+                "qtd_pedestre": int(i % 11 == 0), "qtd_bicicleta": int(i % 13 == 0),
+                "qtd_caminhao": int(i % 7 == 0), "qtd_onibus": 0, "fim_de_semana": i % 4 == 0,
+                "tipo_via": "VIAS URBANAS" if i % 6 else "ESTRADAS E RODOVIAS",
+                "tipo_sinistro": ["COLISAO", "CHOQUE", "OUTROS"][i % 3],
+                "turno": ["TARDE", "NOITE", "MANHA", "MADRUGADA"][i % 4],
+            })
+    return pd.DataFrame(linhas)
+
+
+class TestModelo(unittest.TestCase):
+    def test_razao_de_chance_bate_com_a_tabela_2x2(self):
+        # Exposto: 30 graves e 70 não graves; não exposto: 10 graves e 90 não graves
+        X = pd.DataFrame({"exposto": [1] * 100 + [0] * 100}, dtype=float)
+        y = [1] * 30 + [0] * 70 + [1] * 10 + [0] * 90
+        clf = modelo.novo_classificador().fit(X, y)
+        rc = modelo.razoes_de_chance(clf, X).loc["exposto"]
+        esperado = (30 * 90) / (70 * 10)
+        erro_padrao = np.sqrt(1 / 30 + 1 / 70 + 1 / 10 + 1 / 90)
+        self.assertAlmostEqual(rc["razao_chance"], esperado, places=3)
+        self.assertAlmostEqual(rc["ic_inf"], esperado * np.exp(-1.96 * erro_padrao), places=3)
+        self.assertAlmostEqual(rc["ic_sup"], esperado * np.exp(1.96 * erro_padrao), places=3)
+
+    def test_modelo_usa_desfecho_grave_e_valida_por_ano(self):
+        df = _sinistros_modelo()
+        df.loc[0, "gravidade"] = "Sem informação de vítimas"
+        df.loc[1, "turno"] = "NAO DISPONIVEL"
+        resultado = modelo.treinar_modelo(df)
+        self.assertEqual(resultado["n_total"], len(df) - 2)
+        self.assertEqual(resultado["temporal"]["ano"].tolist(), [2022, 2023, 2024])
+        self.assertEqual(resultado["temporal"]["anos_treino"].iloc[0], "2019–2021")
+        self.assertEqual(int(resultado["validacao_cruzada"]["rodadas"].iloc[0]), modelo.DOBRAS_CV * modelo.REPETICOES_CV)
+        self.assertLessEqual(resultado["auc_ic"][0], resultado["auc"])
+
+    def test_simulador_aceita_categoria_que_o_modelo_nao_viu(self):
+        df = _sinistros_modelo()
+        resultado = modelo.treinar_modelo(df)
+        caso = df.head(1).copy()
+        caso["tipo_sinistro"] = "ATROPELAMENTO"
+        prob = modelo.prever_probabilidade(resultado, caso)
+        self.assertTrue(0 <= prob[0] <= 1)
+
+    def test_sem_casos_suficientes_nao_ha_modelo(self):
+        self.assertIsNone(modelo.treinar_modelo(_sinistros_modelo(n_por_ano=5, anos=[2020])))
 
 
 class TestEtl(unittest.TestCase):

@@ -18,7 +18,7 @@ O estudo buscou descrever:
 - A evolução temporal e a distribuição por dia e hora;
 - Os tipos de sinistro e os modais envolvidos;
 - A distribuição dos óbitos entre vias urbanas e rodovias;
-- O que um modelo de Machine Learning consegue extrair das variáveis disponíveis.
+- O que um modelo de regressão logística consegue extrair das variáveis disponíveis.
 
 ---
 
@@ -111,15 +111,32 @@ As relações com saída de fábricas, retorno do almoço e álcool são hipóte
 {% if i.via_topo_muda %}
 Com notificações, {{ i.via_topo_com_notificacoes.via }} lideraria ({{ i.via_topo_com_notificacoes.n|br }}), mas {{ i.via_topo_com_notificacoes.pct_notificacoes|br }}% dos registros são notificações. {% if i.via_topo_com_notificacoes.via == "RUA SINHARINHA FROTA" %}O endereço do hospital fica nessa rua, o que indica possível registro do local de atendimento, ainda sem confirmação. {% endif %}Por isso, ela não deve ser tratada como a via mais crítica. {% endif %}Este estudo não analisa trevos específicos.
 
-### 3.6 Modelo de Machine Learning
-Um Random Forest treinado na base comparável obteve **{{ i.modelo.acuracia|br(1) }}% de acurácia**, contra {{ i.modelo.referencia|br(1) }}% de sempre prever a classe mais comum, e {{ i.modelo.balanceada|br(1) }}% de acurácia balanceada.
+### 3.6 Modelo de Regressão Logística
+Uma regressão logística ajustada nos {{ i.modelo.n_total|br }} sinistros da base comparável com desfecho informado estima se houve ferido grave ou óbito ({{ i.modelo.prevalencia|br(1) }}% dos casos).
+
+- **ROC-AUC:** {{ i.modelo.auc|br(3) }} (IC 95%: {{ i.modelo.auc_ic[0]|br(3) }} a {{ i.modelo.auc_ic[1]|br(3) }}); 0,5 equivale ao acaso.
+- **PR-AUC:** {{ i.modelo.pr_auc|br(3) }}, contra {{ (i.modelo.prevalencia / 100)|br(3) }} do acaso.
+- **Com limiar no risco médio:** sensibilidade de {{ i.modelo.sensibilidade|br(1) }}% e precisão de {{ i.modelo.precisao|br(1) }}%.
+- **Acurácia (limiar de 50%):** {{ i.modelo.acuracia|br(1) }}%, contra {{ i.modelo.referencia|br(1) }}% de sempre prever a classe mais comum, e {{ i.modelo.balanceada|br(1) }}% de acurácia balanceada.
+- **Validação cruzada ({{ i.modelo.cv_rodadas }} rodadas):** ROC-AUC de {{ i.modelo.cv_auc|br(3) }} ± {{ i.modelo.cv_auc_desvio|br(3) }}.
+{% if i.modelo.temporal %}
+- **Validação por ano:** treinado só com anos anteriores, ROC-AUC de {% for t in i.modelo.temporal %}{{ t.auc|br(3) }} em {{ t.ano }}{{ ", " if not loop.last else "" }}{% endfor %}{% if i.modelo.ano_parcial %} ({{ i.modelo.temporal[-1].ano }} até {{ i.mes_fim }}){% endif %}.
+{% endif %}
 
 {% if i.modelo.supera_referencia %}
 O modelo supera essa referência, mas continua exploratório.
 {% else %}
-**O modelo não supera a referência, portanto as variáveis disponíveis não sustentam previsão de gravidade.**
+**O modelo não supera a referência com o limiar de 50%, portanto as variáveis disponíveis não sustentam previsão de gravidade de casos individuais.**
 {% endif %}
-As maiores importâncias de permutação são {% for v in i.modelo.principais %}{{ v.variavel }} ({{ v.valor|br(3) }}){{ ", " if not loop.last else "." }}{% endfor %} Elas não indicam sentido nem causa, e o modelo usa dados conhecidos só depois do sinistro.
+
+Razões de chance com intervalo de 95%, mantendo as demais variáveis iguais (referência: {{ i.modelo.referencias }}):
+
+- **Aumentam a chance de desfecho grave ou fatal:** {% for v in i.modelo.aumentam %}{{ v.variavel }}: {{ v.valor|br(2) }} (IC 95%: {{ v.ic_inf|br(2) }} a {{ v.ic_sup|br(2) }}){{ "; " if not loop.last else "." }}{% else %}nenhuma.{% endfor %}
+
+- **Reduzem a chance:** {% for v in i.modelo.reduzem %}{{ v.variavel }}: {{ v.valor|br(2) }} (IC 95%: {{ v.ic_inf|br(2) }} a {{ v.ic_sup|br(2) }}){{ "; " if not loop.last else "." }}{% else %}nenhuma.{% endfor %}
+
+
+As limitações vêm dos dados, não do modelo: a base não traz velocidade, alcoolemia, uso de capacete ou cinto nem idade dos envolvidos. As razões de chance são associações, não causas, e o modelo usa dados conhecidos só depois do sinistro.
 
 ---
 

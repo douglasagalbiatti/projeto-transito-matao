@@ -12,7 +12,7 @@ from src.metricas import (
     razao_letalidade,
     tabela_letalidade,
 )
-from src.modelo import treinar_modelo
+from src.modelo import NOMES_REFERENCIA, NOMES_VARIAVEIS_MODELO, treinar_modelo
 
 DIAS_SEMANA = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
 ROTULOS_TIPO = {
@@ -25,15 +25,8 @@ ROTULOS_TIPO = {
 URBANA, RODOVIA = "VIAS URBANAS", "ESTRADAS E RODOVIAS"
 # Diferença, em pontos percentuais, abaixo da qual duas letalidades são descritas como próximas
 LIMITE_TAXAS_PROXIMAS = 5
-ROTULOS_VARIAVEIS = {
-    "qtd_motocicleta": "motocicletas",
-    "qtd_automovel": "automóveis",
-    "qtd_caminhao": "caminhões",
-    "qtd_pedestre": "pedestres",
-    "qtd_bicicleta": "bicicletas",
-    "hora_int": "hora",
-    "mes": "mês",
-}
+# Ganho mínimo de acurácia, em fração, para dizer que o modelo supera sempre prever a classe mais comum
+MARGEM_REFERENCIA = 0.005
 
 
 def _taxa(df: pd.DataFrame) -> dict:
@@ -55,6 +48,7 @@ def calcular_indicadores(df: pd.DataFrame) -> dict:
     sem_notificacao = df[~notificacao]
     fim = df["data"].max()
     ultimo_mes_completo = (fim + pd.Timedelta(days=1)).month != fim.month
+    ultimo_ano_parcial = (fim + pd.Timedelta(days=1)).year == fim.year
     ind = {
         "data_inicio": df["data"].min().strftime("%d/%m/%Y"),
         "data_fim": fim.strftime("%d/%m/%Y"),
@@ -208,15 +202,37 @@ def calcular_indicadores(df: pd.DataFrame) -> dict:
 
     # Modelo
     modelo = treinar_modelo(df)
-    principais = modelo["importancias"].sort_values(ascending=False).head(3)
+    rc = modelo["razoes_chance"]
+    cv = modelo["validacao_cruzada"]
+    refs = modelo["referencias"]
+
+    def _razoes(linhas):
+        return [
+            {"variavel": NOMES_VARIAVEIS_MODELO.get(nome, nome).lower(), "valor": l.razao_chance, "ic_inf": l.ic_inf, "ic_sup": l.ic_sup}
+            for nome, l in linhas.iterrows()
+        ]
+
     ind["modelo"] = {
         "acuracia": modelo["acuracia"] * 100,
         "referencia": modelo["referencia"] * 100,
         "balanceada": modelo["acuracia_balanceada"] * 100,
-        "supera_referencia": modelo["acuracia"] > modelo["referencia"],
-        "principais": [
-            {"variavel": ROTULOS_VARIAVEIS.get(v, v.replace("tipo_via_", "via: ").replace("tipo_sinistro_", "tipo: ")), "valor": i}
-            for v, i in principais.items()
-        ],
+        "supera_referencia": modelo["acuracia"] > modelo["referencia"] + MARGEM_REFERENCIA,
+        "n_total": modelo["n_total"],
+        "prevalencia": modelo["prevalencia"] * 100,
+        "auc": modelo["auc"],
+        "auc_ic": modelo["auc_ic"],
+        "pr_auc": modelo["pr_auc"],
+        "sensibilidade": modelo["teste"]["sensibilidade"] * 100,
+        "precisao": modelo["teste"]["precisao"] * 100,
+        "cv_rodadas": int(cv["rodadas"].iloc[0]),
+        "cv_auc": cv.loc["auc", "media"],
+        "cv_auc_desvio": cv.loc["auc", "desvio"],
+        "temporal": [{"ano": int(l.ano), "auc": l.auc} for l in modelo["temporal"].itertuples()],
+        "ano_parcial": ultimo_ano_parcial,
+        "referencias": (
+            f"{NOMES_REFERENCIA[refs['tipo_via']]}, {NOMES_REFERENCIA[refs['tipo_sinistro']]} e {NOMES_REFERENCIA[refs['turno']]}"
+        ),
+        "aumentam": _razoes(rc[rc["ic_inf"] > 1]),
+        "reduzem": _razoes(rc[rc["ic_sup"] < 1].sort_values("razao_chance")),
     }
     return ind

@@ -22,7 +22,7 @@ Números do recorte até 29/09/2026:
 - **Óbitos:** **150 vítimas** em 143 sinistros; 55% nas vias urbanas e 41% nas estradas e rodovias, com letalidade por registro de 2,2% e 14,7%.
 - **Choque e colisão:** a letalidade do choque é 4,29 vezes a da colisão (IC95% 2,73 a 6,74), diferença que ocorre nas vias urbanas e não nas rodovias.
 - **Dias:** 1,42 registros/dia nos dias úteis e 1,51 nos fins de semana (p = 0,107), com Sexta e Sábado nas maiores médias.
-- **Modelo:** o Random Forest obteve 78,8% de acurácia, contra 78,8% de sempre prever a classe mais comum.
+- **Modelo (regressão logística):** estima se o sinistro teve ferido grave ou óbito, com ROC-AUC de 0,684 (0,5 equivale ao acaso). O modelo é exploratório e não prevê acidentes; suas limitações vêm da falta de dados como velocidade e alcoolemia.
 
 ---
 
@@ -87,10 +87,10 @@ Os maiores volumes ocorrem às 17h, 18h e 19h, sem dado de fluxo de veículos qu
 
 ![Mapa de Calor Dia e Hora](https://raw.githubusercontent.com/douglasagalbiatti/projeto-transito-matao/artefatos/output/graficos/heatmap_dia_hora.png)
 
-### 5. Modelo Random Forest
-O modelo não supera a referência de sempre prever a classe mais comum, portanto não sustenta previsão de gravidade. A importância de permutação não indica sentido nem causa.
+### 5. Modelo de Regressão Logística
+Razões de chance de desfecho grave ou fatal, com intervalo de 95%, mantendo as demais variáveis iguais (referência: via urbana, colisão e tarde). São associações nesta base, não causas.
 
-![Importância das Features](https://raw.githubusercontent.com/douglasagalbiatti/projeto-transito-matao/artefatos/output/graficos/importancia_features_ml.png)
+![Razões de chance no modelo de regressão logística](https://raw.githubusercontent.com/douglasagalbiatti/projeto-transito-matao/artefatos/output/graficos/razoes_chance_ml.png)
 
 ### 6. Mapas
 O [mapa interativo](https://github.com/douglasagalbiatti/projeto-transito-matao/blob/artefatos/output/graficos/mapa_acidentes.html) (baixe o HTML para abrir) e o mapa estático mostram 2.159 registros, sem notificações, que se concentram em poucas coordenadas repetidas. Parte dos pontos restantes também pode indicar uma referência, e não o local do impacto.
